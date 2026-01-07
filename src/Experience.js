@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import { useThree, extend, useFrame } from "@react-three/fiber";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import CustomObject from "./CustomObject";
+// import CustomObject from "./CustomObject";
 
 // 扩展 Three.js 对象到 React Three Fiber
 extend({ OrbitControls });
@@ -14,10 +14,9 @@ export default function Experience() {
   // 每帧执行动画
   useFrame((state, delta) => {
     // 立方体旋转
-    cubeRef.current.rotation.y += delta;
+    // cubeRef.current.rotation.y += delta;
     // 群组旋转
     // groupRef.current.rotation.y += delta * 0.5;
-
     // 相机圆周运动（可选）
     // const angle = state.clock.elapsedTime * 0.5;
     // camera.position.x = Math.sin(angle) * 8;
@@ -61,7 +60,7 @@ export default function Experience() {
       </mesh>
 
       {/* 自定义对象 */}
-      <CustomObject />
+      {/* <CustomObject /> */}
 
       {/* 辅助工具（开发时使用） */}
       {/* <axesHelper args={[5]} /> */}

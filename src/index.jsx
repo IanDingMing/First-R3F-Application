@@ -11,7 +11,7 @@ const cameraSettings = {
   fov: 45, // 视野角度
   near: 0.1, // 近平面
   far: 200, // 远平面
-  position: [3, 2, 6], // 相机位置
+  position: [-4, 3, 6], // 相机位置
 };
 
 root.render(
