@@ -1465,3 +1465,560 @@ javascript
 </Canvas>
 ```
 
+# P58 Drei
+
+## 一、三种控制器详解
+
+### 1. **OrbitControls（轨道控制器）**
+
+最简单易用的相机控制器，适合大多数3D场景导航。
+
+javascript
+
+```
+import { OrbitControls } from '@react-three/drei'
+
+function Scene() {
+  return (
+    <>
+      <OrbitControls
+        // 基本配置
+        makeDefault={true}           // 设为默认控制器，加入TransformControls等会导致界面跟着移动，这个选项可以解决
+        enableDamping={true}         // 启用惯性效果（更流畅）
+        dampingFactor={0.05}         // 惯性系数
+        
+        // 移动限制
+        minDistance={1}              // 最小缩放距离
+        maxDistance={100}            // 最大缩放距离
+        minPolarAngle={0}            // 最小垂直角度（弧度）
+        maxPolarAngle={Math.PI}      // 最大垂直角度（弧度）
+        minAzimuthAngle={-Infinity}  // 最小水平角度
+        maxAzimuthAngle={Infinity}   // 最大水平角度
+        
+        // 速度控制
+        rotateSpeed={0.5}            // 旋转速度
+        zoomSpeed={0.5}              // 缩放速度
+        panSpeed={0.5}               // 平移速度
+        
+        // 功能开关
+        enableZoom={true}            // 启用缩放
+        enableRotate={true}          // 启用旋转
+        enablePan={true}             // 启用平移
+        
+        // 其他设置
+        screenSpacePanning={true}    // 屏幕空间平移
+        autoRotate={true}            // 自动旋转
+        autoRotateSpeed={1}          // 自动旋转速度
+        reverseOrbit={false}         // 反向轨道
+      />
+      
+      {/* 场景内容 */}
+      <mesh>
+        <boxGeometry />
+        <meshStandardMaterial color="blue" />
+      </mesh>
+    </>
+  )
+}
+```
+
+
+
+### 2. **TransformControls（变换控制器）**
+
+用于在场景中交互式地移动、旋转和缩放物体。
+
+javascript
+
+```
+import { TransformControls } from '@react-three/drei'
+import { useRef } from 'react'
+
+function Scene() {
+  const meshRef = useRef()
+  const transformRef = useRef()
+  
+  return (
+    <>
+      {/* 绑定到特定物体的变换控制器 */}
+      <TransformControls
+        ref={transformRef}
+        object={meshRef}      // 要控制的物体引用
+        mode="translate"      // 模式：translate(移动)/rotate(旋转)/scale(缩放)
+        
+        // 轴显示设置
+        showX={true}          // 显示X轴
+        showY={true}          // 显示Y轴
+        showZ={true}          // 显示Z轴
+        
+        // 尺寸设置
+        size={1}              // 控制器尺寸（Three.js单位）
+        
+        // 空间设置
+        space="world"         // 空间：world(世界)/local(局部)
+        
+        // 变换约束
+        translationSnap={0.5} // 移动吸附距离
+        rotationSnap={Math.PI / 4} // 旋转吸附角度
+        scaleSnap={0.1}       // 缩放吸附比例
+      />
+      
+      {/* 受控制的物体 */}
+      <mesh ref={meshRef} position={[0, 0, 0]}>
+        <boxGeometry />
+        <meshStandardMaterial color="red" />
+      </mesh>
+      
+      {/* 模式切换示例 */}
+      <button onClick={() => transformRef.current.setMode('translate')}>
+        移动模式
+      </button>
+      <button onClick={() => transformRef.current.setMode('rotate')}>
+        旋转模式
+      </button>
+      <button onClick={() => transformRef.current.setMode('scale')}>
+        缩放模式
+      </button>
+      
+      {/* 启用/禁用 */}
+      <button onClick={() => transformRef.current.setEnabled(!transformRef.current.enabled)}>
+        切换控制器
+      </button>
+    </>
+  )
+}
+```
+
+
+
+### 3. **PivotControls（枢轴控制器）**
+
+更高级的控制器，允许设置自定义枢轴点进行变换。
+
+javascript
+
+```
+import { PivotControls } from '@react-three/drei'
+import { useRef } from 'react'
+
+function Scene() {
+  const meshRef = useRef()
+  
+  return (
+    <PivotControls
+      // 枢轴点位置（关键！）
+      anchor={[0, 0, 0]}  // 相对于物体原点的位置
+      /*
+        anchor参数详解：
+        [0, 0, 0] - 控制点在物体原点
+        [1, 0, 0] - 控制点在物体X轴正方向1个单位处
+        [0, 1, 0] - 控制点在物体Y轴正方向1个单位处
+        [-1, 0, 0] - 控制点在物体X轴负方向1个单位处
+        
+        注意：这里的"单位"是Three.js单位，取决于你的场景尺度
+        比如你的立方体尺寸是1x1x1，那么[1, 0, 0]就是立方体右边的中心点
+      */
+      
+      // 深度测试（避免被物体遮挡）
+      depthTest={false}
+      
+      // 线条宽度
+      lineWidth={4}
+      
+      // 轴颜色
+      axisColors={['#9381ff', '#ff4d6d', '#7ae582']}
+      
+      // 固定屏幕大小
+      fixed={true}
+      /*
+        fixed: true 时，控制器在屏幕上的大小保持不变
+        无论相机距离多远，控制器在屏幕上总是显示相同的大小
+        这对于远距离操作非常有用
+      */
+      
+      // 缩放比例
+      scale={100}
+      /*
+        scale参数详解：
+        当 fixed=true 时，这个值表示控制器的"视觉大小"
+        值越大，控制器在屏幕上看起来越大
+        100是一个经验值，通常需要根据场景调整
+        
+        注意：这个值不是像素单位，而是一个相对比例
+        它影响的是控制器在3D空间中的实际尺寸
+        但由于fixed=true，这个尺寸会自动调整以保持屏幕大小不变
+      */
+      
+      // 其他设置
+      visible={true}           // 是否可见
+      disableAxes={false}      // 禁用轴
+      disableSliders={false}   // 禁用滑块
+      disableRotations={false} // 禁用旋转
+      
+      // 事件回调
+      onDragStart={() => console.log('开始拖动')}
+      onDrag={(l, dl, w, dw) => console.log('拖动中', w)}
+      onDragEnd={() => console.log('拖动结束')}
+    >
+      {/* 受控制的物体 */}
+      <mesh ref={meshRef}>
+        <sphereGeometry />
+        <meshStandardMaterial color="orange" />
+      </mesh>
+    </PivotControls>
+  )
+}
+```
+
+
+
+### 控制器对比
+
+| 特性         | OrbitControls        | TransformControls      | PivotControls            |
+| :----------- | :------------------- | :--------------------- | :----------------------- |
+| **用途**     | 控制相机视角         | 编辑单个物体           | 以自定义点为中心编辑物体 |
+| **控制对象** | 相机                 | 指定物体               | 指定物体（带枢轴点）     |
+| **交互方式** | 鼠标拖拽、滚轮       | 拖动控制柄             | 拖动控制柄               |
+| **主要功能** | 旋转、缩放、平移场景 | 移动、旋转、缩放物体   | 以枢轴点为中心变换物体   |
+| **使用场景** | 场景导航、产品展示   | 3D建模工具、场景编辑器 | 动画制作、复杂变换       |
+| **优点**     | 简单易用、适合浏览   | 精确控制、多种模式     | 灵活枢轴、适合动画       |
+| **缺点**     | 不能编辑物体         | 枢轴点固定             | 相对复杂                 |
+
+## 二、Html组件详解
+
+允许在3D场景中渲染HTML内容。
+
+javascript
+
+```
+import { Html } from '@react-three/drei'
+import { useRef } from 'react'
+
+function Scene() {
+  const sphereRef = useRef()
+  const cubeRef = useRef()
+  
+  return (
+    <>
+      <mesh ref={sphereRef} position={[-2, 0, 0]}>
+        <sphereGeometry />
+        <meshStandardMaterial color="orange" />
+        
+        <Html
+          // 位置设置
+          position={[1, 1, 0]}  // 相对于物体的偏移位置
+          /*
+            这里的[1, 1, 0]表示：
+            x: 物体右边1个单位
+            y: 物体上方1个单位
+            z: 与物体相同深度
+          */
+          
+          // 包装器设置
+          wrapperClass="label"  // 外部容器CSS类
+          center={true}         // 内容居中
+          
+          // 距离因子（重要！）
+          distanceFactor={6}
+          /*
+            distanceFactor 控制HTML内容随相机距离的缩放
+            值越大，HTML内容在远处看起来越大
+            设为0时禁用自动缩放，保持固定屏幕大小
+            
+            计算方式：
+            HTML屏幕大小 = 原始大小 × distanceFactor / 相机距离
+          */
+          
+          // 遮挡设置
+          occlude={[sphereRef, cubeRef]}
+          /*
+            occlude 参数：
+            true - 使用整个场景进行遮挡检测
+            [ref1, ref2] - 只检测指定物体的遮挡
+            false - 不进行遮挡检测
+            
+            当HTML被指定物体遮挡时，会自动隐藏
+          */
+          
+          // 其他设置
+          transform={true}      // 应用物体变换
+          sprite={false}        // 是否始终面向相机（公告牌效果）
+          zIndexRange={[100, 0]} // z-index范围
+          pointerEvents="auto"  // 鼠标事件处理
+          style={{ color: 'white' }} // 内联样式
+          as="div"              // HTML标签类型
+          
+          // 计算位置（高级）
+          calculatePosition={(el, camera, size) => {
+            // 自定义位置计算函数
+            return [0, 0, 0]
+          }}
+        >
+          {/* HTML内容 */}
+          <div className="tooltip">
+            <h3>球体</h3>
+            <p>半径: 1单位</p>
+            <button onClick={() => alert('点击了球体！')}>
+              详情
+            </button>
+          </div>
+        </Html>
+      </mesh>
+      
+      {/* 另一个示例：固定屏幕位置的HTML */}
+      <Html
+        fullscreen  // 全屏模式
+        style={{
+          position: 'absolute',
+          top: '10px',
+          left: '10px',
+          color: 'white',
+          fontSize: '20px',
+          zIndex: 1000
+        }}
+      >
+        <div>3D场景控制器</div>
+        <button>重置视角</button>
+      </Html>
+    </>
+  )
+}
+
+// 对应的CSS
+// .label {
+//   background: rgba(0, 0, 0, 0.7);
+//   padding: 10px;
+//   border-radius: 5px;
+//   color: white;
+//   pointer-events: auto;
+// }
+```
+
+
+
+## 三、SDF（有符号距离场）字体
+
+### 什么是SDF？
+
+SDF（Signed Distance Field）是一种表示字体的技术：
+
+1. **原理**：每个像素存储到最近字符边界的距离（内部为正，外部为负）
+2. **优点**：
+   - 任意缩放不会失真
+   - 边缘清晰锐利
+   - 支持高质量抗锯齿
+   - 可实现描边、发光等效果
+3. **缺点**：需要预先生成，文件体积较大
+
+### 字体准备步骤：
+
+[文字格式网站](https://transfonter.org/)；[文字资源网站](https://www.fontsquirrel.com/)
+
+javascript
+
+```
+// 1. 访问 https://transfonter.org/
+// 2. 上传字体文件（.ttf, .otf等）
+// 3. 选择格式：通常选择 .woff（现代浏览器）或 .ttf（兼容性）
+// 4. 下载转换后的字体文件
+// 5. 将字体文件放入项目的 public 或 assets 目录
+
+// 字体使用
+import { Text } from '@react-three/drei'
+
+function Scene() {
+  return (
+    <Text
+      font="./fonts/bangers-regular.woff"  // 字体文件路径
+      fontSize={1}                         // 字体大小（Three.js单位）
+      color="salmon"                       // 字体颜色
+      maxWidth={2}                         // 最大宽度（自动换行）
+      lineHeight={1.2}                     // 行高
+      letterSpacing={0.05}                 // 字间距
+      textAlign="center"                   // 对齐方式：left/center/right
+      anchorX="center"                     // X轴锚点：left/center/right
+      anchorY="middle"                     // Y轴锚点：top/middle/bottom/baseline
+      fillOpacity={1}                      // 填充不透明度
+      strokeWidth={0.02}                   // 描边宽度
+      strokeColor="#000000"                // 描边颜色
+      strokeOpacity={0.5}                  // 描边不透明度
+      outlineWidth={0}                     // 外边框宽度
+      outlineColor="#000000"               // 外边框颜色
+      outlineOpacity={1}                   // 外边框不透明度
+      outlineBlur={0}                      // 外边框模糊
+      outlineOffsetX={0}                   // 外边框X偏移
+      outlineOffsetY={0}                   // 外边框Y偏移
+      depthOffset={1}                      // 深度偏移（避免z-fighting）
+      curveRadius={0}                      // 弯曲半径（弧形文字）
+      material={null}                      // 自定义材质（覆盖color等设置）
+    >
+      我是3D文字
+      {/* 可以直接使用材质作为子元素 */}
+      {/* <meshNormalMaterial /> */}
+    </Text>
+  )
+}
+```
+
+
+
+## 四、Float组件
+
+创建漂浮动画效果。
+
+javascript
+
+```
+import { Float } from '@react-three/drei'
+
+function Scene() {
+  return (
+    <Float
+      // 漂浮速度
+      speed={5}  // 完整漂浮周期所需时间（秒）
+      
+      // 漂浮强度
+      floatIntensity={2}  // 漂浮幅度（Three.js单位）
+      /*
+        floatIntensity: 1 表示物体上下浮动1个单位
+        值越大，浮动范围越大
+      */
+      
+      // 旋转强度
+      rotationIntensity={1}  // 旋转幅度
+      
+      // 漂浮轴限制
+      floatingRange={[-1, 1]}  // Y轴浮动范围 [min, max]
+      
+      // 动画配置
+      children={null}  // 子元素（自动添加漂浮效果）
+    >
+      {/* 任何3D物体都会获得漂浮效果 */}
+      <mesh>
+        <boxGeometry />
+        <meshStandardMaterial color="blue" />
+      </mesh>
+    </Float>
+  )
+}
+
+// 多个物体同时漂浮（同步动画）
+<Float speed={3} floatIntensity={1}>
+  <group>
+    <mesh position={[-2, 0, 0]}>
+      <sphereGeometry />
+    </mesh>
+    <mesh position={[2, 0, 0]}>
+      <boxGeometry />
+    </mesh>
+  </group>
+</Float>
+
+// 不同步漂浮（每个物体独立动画）
+<mesh>
+  <Float speed={Math.random() * 2 + 1} floatIntensity={0.5}>
+    <sphereGeometry />
+  </Float>
+  <meshStandardMaterial />
+</mesh>
+```
+
+
+
+## 五、MeshReflectorMaterial（反射材质）
+
+创建逼真的地面反射效果。
+
+javascript
+
+```
+import { MeshReflectorMaterial } from '@react-three/drei'
+
+function Scene() {
+  return (
+    <mesh position={[0, -1, 0]} rotation-x={-Math.PI * 0.5}>
+      <planeGeometry args={[10, 10]} />
+      
+      <MeshReflectorMaterial
+        // 反射设置
+        mirror={0.5}  // 反射强度（0-1）
+        /*
+          mirror: 0 - 无反射
+          mirror: 0.5 - 半反射（常用）
+          mirror: 1 - 完全镜面反射
+        */
+        
+        // 模糊设置
+        blur={[1000, 1000]}  // 模糊强度 [x轴, y轴]
+        mixBlur={1}          // 模糊混合强度
+        /*
+          blur: [0, 0] - 无模糊（清晰反射）
+          blur: [1000, 1000] - 高度模糊（常用）
+          值越大越模糊
+        */
+        
+        // 分辨率
+        resolution={512}  // 反射贴图分辨率
+        /*
+          分辨率影响反射质量：
+          256 - 低质量，性能好
+          512 - 中等质量（常用）
+          1024 - 高质量，性能消耗大
+        */
+        
+        // 颜色设置
+        color="greenyellow"  // 材质颜色
+        transparent={false}  // 是否透明
+        opacity={1}          // 不透明度
+        
+        // 纹理设置
+        // mixStrength={1}  // 纹理混合强度
+        // depthToBlurRatioBias={0.25}  // 深度模糊比例
+        
+        // 调试设置
+        // debug={0}  // 调试模式：0关闭，1显示深度，2显示法线
+        // reflectorOffset={0}  // 反射偏移（解决自反射问题）
+      />
+    </mesh>
+  )
+}
+
+// 高级用法：自定义纹理
+import { useLoader } from '@react-three/fiber'
+import * as THREE from 'three'
+
+function AdvancedReflector() {
+  const texture = useLoader(THREE.TextureLoader, 'textures/ground.jpg')
+  
+  return (
+    <MeshReflectorMaterial
+      mirror={0.75}
+      blur={[500, 500]}
+      resolution={1024}
+      mixBlur={10}
+      mixStrength={2}
+      depthScale={1}
+      minDepthThreshold={0.9}
+      maxDepthThreshold={1}
+      depthToBlurRatioBias={0.25}
+      distortion={1}
+      color="#a0a0a0"
+      metalness={0.5}
+      roughness={1}
+      roughnessMap={texture}
+    />
+  )
+}
+```
+
+
+
+## 六、注意事项
+
+### 性能优化
+
+1. **Text组件**：大量文字时考虑使用位图字体或精灵图
+2. **Html组件**：避免过多HTML元素，使用`occlude`优化
+3. **MeshReflectorMaterial**：降低`resolution`和`blur`值提高性能
+4. **PivotControls**：非编辑状态时隐藏控制器
+
