@@ -1,13 +1,8 @@
 import { useRef } from "react";
 import { useThree, extend, useFrame } from "@react-three/fiber";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 // import CustomObject from "./CustomObject";
 
-// 扩展 Three.js 对象到 React Three Fiber
-extend({ OrbitControls });
-
 export default function Experience() {
-  const { camera, gl } = useThree();
   const cubeRef = useRef();
   const groupRef = useRef();
 
@@ -26,9 +21,6 @@ export default function Experience() {
 
   return (
     <>
-      {/* 轨道控制器 */}
-      <orbitControls args={[camera, gl.domElement]} />
-
       {/* 灯光系统 */}
       <directionalLight position={[1, 2, 3]} intensity={1.5} />
       <ambientLight intensity={0.5} />
