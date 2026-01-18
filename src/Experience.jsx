@@ -9,6 +9,8 @@ import {
   TransformControls,
   OrbitControls,
 } from "@react-three/drei";
+import { button, useControls } from "leva";
+import { Perf } from "r3f-perf";
 // import CustomObject from "./CustomObject";
 
 export default function Experience() {
@@ -29,8 +31,30 @@ export default function Experience() {
     // camera.lookAt(0, 0, 0);
   });
 
+  const { perfVisible } = useControls({
+    perfVisible: true,
+  });
+
+  const { position, color, visible } = useControls("sphere", {
+    position: { value: { x: -2, y: 0 }, step: 0.01, joystick: "invertY" },
+    color: { r: 200, g: 106, b: 125, a: 0.4 },
+    visible: true,
+    myInterval: { min: 0, max: 10, value: [4, 5] },
+    clickMe: button(() => {
+      console.log("ok");
+    }),
+    choice: { options: ["a", "b", "c"] },
+  });
+
+  const { scale } = useControls("cube", {
+    scale: { value: 1.5, min: 0, max: 5, step: 0.01 },
+  });
+  console.log(position, color);
+
   return (
     <>
+      {perfVisible ? <Perf position="top-left" /> : null}
+
       <OrbitControls makeDefault />
 
       {/* 灯光系统 */}
@@ -40,13 +64,17 @@ export default function Experience() {
       {/* 可交互的群组 */}
       <group ref={groupRef}>
         {/* 球体 */}
-        <mesh ref={sphereRef} position-x={-2}>
+        <mesh
+          ref={sphereRef}
+          position={[position.x, position.y, 0]}
+          visible={visible}
+        >
           <sphereGeometry />
-          <meshStandardMaterial color="orange" />
+          <meshStandardMaterial color={color} />
         </mesh>
 
         {/* 立方体 */}
-        <mesh ref={cubeRef} position-x={2} scale={1.5}>
+        <mesh ref={cubeRef} position-x={2} scale={scale}>
           <boxGeometry />
           <meshStandardMaterial color="mediumpurple" />
         </mesh>

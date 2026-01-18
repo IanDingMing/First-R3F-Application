@@ -3,6 +3,8 @@ import "./style.css";
 import ReactDOM from "react-dom/client";
 import { Canvas } from "@react-three/fiber";
 import Experience from "./Experience";
+import { StrictMode } from "react";
+import { Leva } from "leva";
 
 const root = ReactDOM.createRoot(document.querySelector("#root"));
 
@@ -15,24 +17,27 @@ const cameraSettings = {
 };
 
 root.render(
-  <Canvas
-    // 设备像素比，2为高分辨率适配
-    dpr={2}
-    // WebGLRenderer 配置
-    gl={{
-      antialias: true, // 抗锯齿
-      toneMapping: THREE.ACESFilmicToneMapping, // 色调映射
-      outputEncoding: THREE.sRGBEncoding, // 输出编码（注意：新版本 THREE 使用 THREE.SRGBColorSpace）
-    }}
-    // 相机配置
-    camera={cameraSettings}
-    // 阴影设置（可选的优化）
-    // shadows
-    // 事件管理（可选的优化）
-    // eventSource={document.getElementById("root")}
-  >
-    {/* 启用色调映射后需要添加色彩管理 */}
-    {/* <color attach="background" args={["#000000"]} /> */}
-    <Experience />
-  </Canvas>
+  <StrictMode>
+    <Leva collapsed />
+    <Canvas
+      // 设备像素比，2为高分辨率适配
+      dpr={2}
+      // WebGLRenderer 配置
+      gl={{
+        antialias: true, // 抗锯齿
+        toneMapping: THREE.ACESFilmicToneMapping, // 色调映射
+        outputEncoding: THREE.sRGBEncoding, // 输出编码（注意：新版本 THREE 使用 THREE.SRGBColorSpace）
+      }}
+      // 相机配置
+      camera={cameraSettings}
+      // 阴影设置（可选的优化）
+      // shadows
+      // 事件管理（可选的优化）
+      // eventSource={document.getElementById("root")}
+    >
+      {/* 启用色调映射后需要添加色彩管理 */}
+      {/* <color attach="background" args={["#000000"]} /> */}
+      <Experience />
+    </Canvas>
+  </StrictMode>
 );
