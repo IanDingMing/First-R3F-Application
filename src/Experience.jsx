@@ -21,7 +21,7 @@ export default function Experience() {
   // 每帧执行动画
   useFrame((state, delta) => {
     // 立方体旋转
-    // cubeRef.current.rotation.y += delta;
+    cubeRef.current.rotation.y += delta * 0.2;
     // 群组旋转
     // groupRef.current.rotation.y += delta * 0.5;
     // 相机圆周运动（可选）
@@ -31,29 +31,9 @@ export default function Experience() {
     // camera.lookAt(0, 0, 0);
   });
 
-  const { perfVisible } = useControls({
-    perfVisible: true,
-  });
-
-  const { position, color, visible } = useControls("sphere", {
-    position: { value: { x: -2, y: 0 }, step: 0.01, joystick: "invertY" },
-    color: { r: 200, g: 106, b: 125, a: 0.4 },
-    visible: true,
-    myInterval: { min: 0, max: 10, value: [4, 5] },
-    clickMe: button(() => {
-      console.log("ok");
-    }),
-    choice: { options: ["a", "b", "c"] },
-  });
-
-  const { scale } = useControls("cube", {
-    scale: { value: 1.5, min: 0, max: 5, step: 0.01 },
-  });
-  console.log(position, color);
-
   return (
     <>
-      {perfVisible ? <Perf position="top-left" /> : null}
+      <Perf position="top-left" />
 
       <OrbitControls makeDefault />
 
@@ -64,17 +44,13 @@ export default function Experience() {
       {/* 可交互的群组 */}
       <group ref={groupRef}>
         {/* 球体 */}
-        <mesh
-          ref={sphereRef}
-          position={[position.x, position.y, 0]}
-          visible={visible}
-        >
+        <mesh ref={sphereRef} position-x={-2}>
           <sphereGeometry />
-          <meshStandardMaterial color={color} />
+          <meshStandardMaterial color="orange" />
         </mesh>
 
         {/* 立方体 */}
-        <mesh ref={cubeRef} position-x={2} scale={scale}>
+        <mesh ref={cubeRef} position-x={2} scale={1.5}>
           <boxGeometry />
           <meshStandardMaterial color="mediumpurple" />
         </mesh>
