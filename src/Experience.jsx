@@ -39,70 +39,24 @@ export default function Experience() {
 
       {/* 可交互的群组 */}
       <group ref={groupRef}>
-        <PivotControls
-          anchor={[0, 0, 0]}
-          depthTest={false}
-          lineWidth={4}
-          axisColors={["#9381ff", "#ff4d6d", "#7ae582"]}
-          scale={100}
-          fixed={true}
-        >
-          {/* 球体 */}
-          <mesh ref={sphereRef} position-x={-2}>
-            <sphereGeometry />
-            <meshStandardMaterial color="orange" />
-            <Html
-              position={[1, 1, 0]}
-              wrapperClass="label"
-              center
-              distanceFactor={6}
-              occlude={[sphereRef, cubeRef]}
-            >
-              That's a sphere 👍
-            </Html>
-          </mesh>
-        </PivotControls>
+        {/* 球体 */}
+        <mesh ref={sphereRef} position-x={-2}>
+          <sphereGeometry />
+          <meshStandardMaterial color="orange" />
+        </mesh>
 
         {/* 立方体 */}
-        <mesh
-          ref={cubeRef}
-          rotation-y={Math.PI * 0.25}
-          position-x={2}
-          scale={1.5}
-        >
+        <mesh ref={cubeRef} position-x={2} scale={1.5}>
           <boxGeometry />
           <meshStandardMaterial color="mediumpurple" />
         </mesh>
-        <TransformControls object={cubeRef} mode="rotate" />
       </group>
 
       {/* 地面平面 */}
       <mesh position-y={-1} rotation-x={-Math.PI * 0.5} scale={10}>
         <planeGeometry />
-        {/* <meshStandardMaterial color="greenyellow" /> */}
-        <MeshReflectorMaterial
-          resolution={512}
-          blur={[1000, 1000]}
-          mixBlur={1}
-          mirror={0.5}
-          color="greenyellow"
-        />
+        <meshStandardMaterial color="greenyellow" />
       </mesh>
-
-      <Float speed={5} floatIntensity={2}>
-        <Text
-          font="./bangers-v20-latin-regular.woff"
-          fontSize={1}
-          color={"salmon"}
-          position-y={2}
-          maxWidth={2}
-          textAlign="center"
-        >
-          I LOVE R3F
-          {/* 根据摄像机角度不同变色 */}
-          {/* <meshNormalMaterial /> */}
-        </Text>
-      </Float>
 
       {/* 自定义对象 */}
       {/* <CustomObject /> */}
