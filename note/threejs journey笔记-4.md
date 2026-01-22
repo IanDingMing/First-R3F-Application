@@ -2351,3 +2351,426 @@ javascript
 
 
 
+# P60 Environment and Staging
+
+------
+
+## 📖 前言
+
+本笔记整合了理论学习与实践探索，系统梳理了在使用 React Three Fiber 和 @react-three/drei 时，关于环境、光照、阴影等高级视觉效果的核心概念、实现方案与踩坑记录。笔记遵循从基础到高级、从问题到解决的逻辑，保留了实践中的核心代码与思考过程。
+
+------
+
+## 一、场景背景设置的四种方式及其本质区别
+
+**核心认知**：背景设置并非只有一种方法，其区别在于**作用的层级和时机**，这直接决定了渲染结果和性能。
+
+### 1. CSS中更改
+
+css
+
+```
+/* 在CSS文件中 */
+#root {
+  background: #000;
+}
+```
+
+
+
+**特点**：最简单，但只能设置纯色，无3D场景交互效果。
+
+### 2. 通过gl更改（WebGLRenderer）
+
+javascript
+
+```
+// Canvas的onCreated回调中
+// <Canvas onCreated={created}>...</Canvas>
+const created = ({ scene, gl }) => {
+  gl.setClearColor(“#ff0000”, 1);
+};
+```
+
+
+
+**特点**：直接操作WebGL渲染器的清除颜色，高效但底层。
+
+### 3. 通过scene更改
+
+javascript
+
+```
+// Canvas的onCreated回调中
+// <Canvas onCreated={created}>...</Canvas>
+const created = ({ scene, gl }) => {
+  scene.background = new THREE.Color(“red”);
+};
+```
+
+
+
+**特点**：设置Three.js场景的背景，可以设置为颜色、纹理等。
+
+### 4. 通过color元素更改
+
+jsx
+
+```
+<Canvas>
+  <color attach=“background” args={[“#000000”]} />
+  <Experience />
+</Canvas>
+```
+
+
+
+**特点**：React Three Fiber方式，最推荐，与React生命周期集成。
+
+------
+
+### 🔥 重要辨析：`Environment`组件的背景
+
+- `Environment` 的 `background` 属性设为 `true` 时，其内部的环境贴图（HDR/EXR）会作为场景背景。
+- **本质区别**：前四种是设置**纯色或静态图片背景**。`Environment` 提供的是**一张具备照明信息的动态环境纹理**，它既是背景，也是光源（用于物体反射和漫反射）。
+- **优先级**：当 `Environment` 的 `background={true}` 时，会覆盖 `scene.background` 的设置。
+
+------
+
+## 二、灯光、阴影系统深度解析
+
+### 1. 基础阴影与灯光辅助
+
+jsx
+
+```
+// 1. 启用Canvas的阴影系统
+<Canvas shadows>{/* ... */}</Canvas>
+
+// 2. 创建可投射阴影的平行光，并使用辅助器观察
+import { useHelper } from ‘@react-three/drei’;
+const directionalLight = useRef();
+useHelper(directionalLight, THREE.DirectionalLightHelper, 1);
+
+<directionalLight
+  ref={directionalLight}
+  position={[5, 5, 5]}
+  intensity={1}
+  castShadow // 关键：使光产生阴影
+  shadow-mapSize={[1024, 1024]} // 阴影贴图分辨率
+/>
+
+// 3. 物体与地面必须声明阴影关系
+<mesh castShadow>...</mesh> // 投射阴影的物体
+<mesh receiveShadow>...</mesh> // 接收阴影的地面
+```
+
+
+
+### 2. BakeShadows的意义
+
+jsx
+
+```
+<BakeShadows />
+```
+
+
+
+**作用**：烘焙阴影到纹理中，提升性能。
+**适用场景**：
+
+- 静态场景（相机、灯光、物体都不移动）
+- 需要高性能渲染的场景
+- 预计算光照的场景
+
+**注意**：如果场景中有动态元素，**BakeShadows会导致阴影不更新**。
+
+### 3. SoftShadows
+
+**原理**：通过全局的**着色器替换（Shader Replacement）**，向场景中所有标准材质的片元着色器内注入PCF（Percentage Closer Filtering）算法，从而柔化阴影边缘。
+
+javascript
+
+```
+import { softShadows } from ‘@react-three/drei’;
+softShadows({
+  frustum: 3.75,
+  size: 0.005,
+  near: 9.5,
+  samples: 17,
+  rings: 11,
+});
+```
+
+
+
+**特点**：
+
+- 提供更柔和的阴影边缘
+- 通过着色器实现
+- 性能开销较高
+
+#### ⚠️ 原理与重大冲突警告
+
+- 此全局替换机制会与**自定义着色器材质（`ShaderMaterial` 或 `RawShaderMaterial`）** 产生直接冲突。因为自定义着色器完全接管了渲染流程，`softShadows`无法修改其代码，导致这些物体的阴影异常（锯齿、消失或渲染错误）。
+- **替代方案**：如需自定义材质+柔和阴影，必须**手动在自己的着色器代码中实现阴影贴图采样和PCF算法**。
+
+### 4. ContactShadows：无需灯光的接触阴影
+
+jsx
+
+```
+import { ContactShadows } from ‘@react-three/drei’;
+<ContactShadows
+  position={[0, -0.99, 0]} // 紧贴地面
+  scale={10}
+  opacity={0.4}
+  blur={2.8} // 模糊度
+  far={5}
+  resolution={512} // 分辨率，影响质量与性能
+  frames={1} // 静态渲染，1帧即可
+/>
+```
+
+
+
+- **用途**：模拟物体与地面接触时那一道柔和的、AO（环境光遮蔽）般的阴影，增强“接地感”。
+- **优点**：计算成本低，不依赖真实灯光，易于配置。
+
+### 5. AccumulativeShadows：高质量静态累积阴影
+
+jsx
+
+```
+import { AccumulativeShadows, RandomizedLight } from ‘@react-three/drei’;
+
+<AccumulativeShadows
+  position={[0, -0.99, 0]} // 地面位置y为-1
+  scale={10}
+  color=“#316d39”
+  opacity={0.8}
+  frames={100} // 累积计算的采样次数
+  temporal={false} // 关键：对于静态场景必须设为 false
+  blend={100}
+>
+  <RandomizedLight
+    amount={8} // 用于累积的随机光源数量
+    radius={1}
+    position={[1, 2, 3]}
+    bias={0.001}
+  />
+</AccumulativeShadows>
+```
+
+
+
+- **核心原理**：这是一个**烘焙式**阴影。它在初始化时，通过 `RandomizedLight` 生成的大量随机光源进行多次（`frames`次）采样，将结果累积到一张纹理中，形成一种极其柔和、无噪点的静态接触阴影。
+- **为什么必须搭配 `RandomizedLight`？** `AccumulativeShadows` 是“画布”，`RandomizedLight` 是提供采样数据的“画笔”，两者是固定搭配。
+- **关键参数详解**：
+  - **`frames`（累积帧数）**：**直接决定性能和质量的核心参数**。数值越大（如1000），采样越多，阴影质量越高（越平滑），但**初始计算时间越长**，可能导致卡顿。**优化时首要考虑降低此值**（如100-200）。
+  - **`temporal`（时间累积）**：
+    - `true`：阴影会在多帧中渐进式累积完成。视觉上会看到阴影“生长”出来，**不适用于静态场景**，会造成视觉错误。
+    - `false`：阴影在加载时一次性计算完成。**静态场景必须设为 `false`**。
+- **核心用途与场景**：
+  - **产品展示**：对静止的物体（如手机、球鞋模型）生成极为真实、柔和的落地阴影。
+  - **建筑设计可视化**：为建筑模型提供干净、美观的静态阴影。
+  - **艺术渲染**：需要高度可控且美观的阴影效果时。
+
+------
+
+## 三、环境与天空系统
+
+### 1. Sky组件基本用法
+
+jsx
+
+```
+const { sunPosition } = useControls(“sky”, {
+  sunPosition: { value: [1, 2, 3] },
+});
+
+<Sky sunPosition={sunPosition} />
+<directionalLight position={sunPosition} intensity={1.5} />
+```
+
+
+
+**特点**：提供真实的天空背景，与太阳位置同步。
+
+### 2. Sky 组件与球面坐标实践
+
+`Sky` 组件的 `sunPosition` 属性接受一个直角坐标系数组 `[x, y, z]`。要使用更符合直觉的球面坐标，需手动转换。
+
+jsx
+
+```
+import * as THREE from ‘three’;
+import { Sky } from ‘@react-three/drei’;
+import { useMemo } from ‘react’;
+
+function SkyWithSpherical() {
+  // 定义球面坐标参数
+  const radius = 100; // 距离
+  const phi = THREE.MathUtils.degToRad(45); // 与Y轴夹角（纬度），0到PI
+  const theta = THREE.MathUtils.degToRad(60); // 在XZ平面上的旋转角（经度）
+
+  // 使用 useMemo 缓存转换结果
+  const sunPosition = useMemo(() => {
+    // 使用 Three.js 原生 API
+    const spherical = new THREE.Spherical(radius, phi, theta);
+    const vector = new THREE.Vector3();
+    vector.setFromSpherical(spherical);
+    return [vector.x, vector.y, vector.z];
+  }, [radius, phi, theta]);
+
+  return <Sky sunPosition={sunPosition} />;
+}
+```
+
+
+
+- **关键点**：R3F/Drei 没有为 `THREE.Spherical` 提供专用组件，需要在逻辑层使用原生 Three.js API 计算后，将结果传递给声明式组件。
+
+### 3. Environment 组件全解
+
+**资源**：[环境贴图网站](https://polyhaven.com/hdris)
+
+**多种环境贴图加载方式：**
+
+jsx
+
+```
+// 方式A：使用HDR单文件（推荐，效果最好）
+<Environment files=“./path/to/your.hdr” />
+
+// 方式B：使用立方体贴图六个面
+<Environment
+  files={[
+    “./environmentMaps/2/px.jpg”,
+    “./environmentMaps/2/ny.jpg”,
+    “./environmentMaps/2/px.jpg”,
+    “./environmentMaps/2/ny.jpg”,
+    “./environmentMaps/2/px.jpg”,
+    “./environmentMaps/2/ny.jpg”,
+  ]}
+/>
+
+// 方式C：使用预设（便捷，但依赖网络）
+<Environment preset=“sunset” background />
+// 常用preset: ‘city‘, ’dawn‘, ’night‘, ’forest‘, ’studio‘, ’apartment‘, ’warehouse‘, ’sunset’
+```
+
+
+
+**解决“漂浮感”与地面投影：**
+
+jsx
+
+```
+<Environment
+  files=“the_sky_is_on_fire_2k.hdr”
+  ground={{ // 关键配置：定义一个虚拟的地面平面用于环境反射
+    height: 15, // 地面高度
+    radius: 60, // 地面半径
+    scale: 100, // 缩放
+  }}
+/>
+// 此时，物体 position-y 设为地面高度，即可看起来“站在”环境地面上。
+// 可以注释掉真实的地面几何体，配合 position-y={0} 的 ContactShadows 实现完美接地。
+```
+
+
+
+**自定义额外平面光源：**
+
+jsx
+
+```
+<Environment background>
+  <color attach=“background” args={[“#000000”]} />
+  <mesh position-z={-5} scale={10}>
+    <planeGeometry />
+    {/* <meshBasicMaterial color=“red” /> */}
+    <meshBasicMaterial color={[10, 0, 0]} />
+  </mesh>
+</Environment>
+```
+
+
+
+**说明**：`<meshBasicMaterial color={[10, 0, 0]} />`，这种更改颜色方式，可以使颜色强度增加，不是变得更红，而是更白，类似太阳光，强到一定程度就是发白。
+
+**Lightformer组件（与自定义额外平面光源相同效果）**
+
+jsx
+
+```
+<Environment
+  files=“env.hdr”
+  resolution={32} // 降低环境贴图分辨率，显著提升性能，视觉损失小
+  background
+>
+  {/* 自定义额外光源 - 优化方案 */}
+  <Lightformer
+    position-z={-5}
+    scale={10}
+    color=“red”
+    intensity={10} // 强度可以大于1，产生“过曝”的强光源效果
+    form=“ring” // 形状：’ring‘, ’rect‘, ’circle‘等
+  />
+  {/* 对比：初始的Mesh方案更笨重，不易与光照系统集成 */}
+  {/* <mesh position-z={-5} scale={10}>
+    <planeGeometry />
+    <meshBasicMaterial color={[10, 0, 0]} />
+  </mesh> */}
+</Environment>
+```
+
+
+
+------
+
+### 📋 Environment 背景色 vs. 其他四种背景色
+
+它们的根本区别在于**作用时机和层级**。
+
+| 方法                                 | 作用对象        | 时机/原理                                                    | 特点与优先级                                                 |
+| :----------------------------------- | :-------------- | :----------------------------------------------------------- | :----------------------------------------------------------- |
+| **1. CSS背景**                       | Canvas DOM 元素 | 网页层，在WebGL渲染**之下**                                  | 纯色或图片，性能最好，**优先级最低**，会被3D场景覆盖。       |
+| **2. `gl.setClearColor`**            | WebGL渲染器     | 在每一帧渲染开始时清除颜色缓冲区。                           | 底层操作，清除后才会渲染场景。                               |
+| **3. `scene.background`**            | Three.js场景    | 作为场景的一个属性被渲染。                                   | 可以是颜色、纹理（如天空盒），**位于所有3D物体之后**。       |
+| **4. `<color attach="background">`** | Three.js场景    | 是 `scene.background` 的R3F声明式写法。                      | 同上，与方式3等效。                                          |
+| **Environment 背景**                 | 环境贴图        | 作为环境照明系统的一部分，通常是一张HDR/Equirectangular贴图。 | **功能最复杂**：既提供场景照明（反射、漫反射），又可选择性地作为可见背景。其颜色由贴图本身决定。 |
+
+**结论**：`Environment` 的“背景”是**一张具有照明的环境纹理**，而前四种是设置**纯色或静态图片背景**的底层方法。当 `Environment` 的 `background` 属性为 `true` 时，它会覆盖 `scene.background`。
+
+------
+
+## 四、 Stage 组件：开箱即用的展示舞台
+
+`Stage` 是一个**一体化容器组件**，旨在快速搭建一个专业的展示环境。
+
+jsx
+
+```
+import { Stage } from ‘@react-three/drei’;
+<Stage
+  environment=“city” // 指定环境预设
+  intensity={0.5} // 灯光强度
+  shadows={{ type: ‘contact’, bias: -0.001 }} // 阴影类型
+  adjustCamera={true} // 自动调整相机以适应内容
+>
+  <YourModel />
+</Stage>
+```
+
+
+
+- **功能**：它会自动配置环境光、平行光、接触阴影，并调整相机位置。
+- **注意**：其内部可能依赖 `preset` 等在线资源，**在国内网络环境下极易因资源加载失败而报错或白屏**。
+- **备用方案**：若 `Stage` 不可用，可手动组合 `Environment`、`ContactShadows`、基础灯光来模拟其效果。
+
+------
+
+*笔记整理结束*

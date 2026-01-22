@@ -16,6 +16,11 @@ const cameraSettings = {
   position: [-4, 3, 6], // 相机位置
 };
 
+const created = ({ scene, gl }) => {
+  // console.log("created", gl, scene);
+  // gl.setClearColor("#ff0000", 1);
+  // scene.background = new THREE.Color("red");
+};
 root.render(
   <StrictMode>
     <Leva collapsed />
@@ -34,6 +39,7 @@ root.render(
       // shadows
       // 事件管理（可选的优化）
       // eventSource={document.getElementById("root")}
+      onCreated={created}
     >
       {/* 启用色调映射后需要添加色彩管理 */}
       {/* <color attach="background" args={["#000000"]} /> */}
