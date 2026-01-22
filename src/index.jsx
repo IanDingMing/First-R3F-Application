@@ -36,7 +36,7 @@ root.render(
       // 相机配置
       camera={cameraSettings}
       // 阴影设置（可选的优化）
-      // shadows
+      shadows
       // 事件管理（可选的优化）
       // eventSource={document.getElementById("root")}
       onCreated={created}
