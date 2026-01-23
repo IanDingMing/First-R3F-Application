@@ -2771,6 +2771,253 @@ import { Stage } from ‘@react-three/drei’;
 - **注意**：其内部可能依赖 `preset` 等在线资源，**在国内网络环境下极易因资源加载失败而报错或白屏**。
 - **备用方案**：若 `Stage` 不可用，可手动组合 `Environment`、`ContactShadows`、基础灯光来模拟其效果。
 
-------
 
-*笔记整理结束*
+
+# P61 Load Models
+
+## 加载gltf模型
+
+javascript
+
+```
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { useLoader } from "@react-three/fiber";
+
+const model = useLoader(GLTFLoader, "./hamburger.glb");
+console.log(model);
+
+<primitive object={model.scene} scale={0.35} />
+```
+
+
+
+## 加载draco-gltf模型（压缩格式）
+
+javascript
+
+```
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
+
+const model = useLoader(GLTFLoader, "./hamburger-draco.glb", (loader) => {
+  const dracoLoader = new DRACOLoader();
+  dracoLoader.setDecoderPath("./draco/");
+  loader.setDRACOLoader(dracoLoader);
+});
+
+<primitive object={model.scene} scale={0.35} />
+```
+
+
+
+## Suspense实现模型占位符
+
+javascript
+
+```
+import { useRef, Suspense } from "react";
+
+<Suspense
+  fallback={
+    <mesh position-y={0.5} scale={[2, 3, 2]}>
+      <boxGeometry args={[1, 1, 1, 2, 2, 2]} />
+      <meshBasicMaterial wireframe color="red" />
+    </mesh>
+  }
+>
+  <Model />
+</Suspense>
+```
+
+
+
+## 使用drei提供的useGLTF便捷加载
+
+javascript
+
+```
+import { useGLTF } from "@react-three/drei";
+
+export default function Model() {
+  const model = useGLTF("./hamburger.glb");
+  return <primitive object={model.scene} scale={0.35} />;
+}
+```
+
+
+
+### useGLTF的预加载机制
+
+`useGLTF.preload()` 是异步预加载方法，它在组件实际渲染之前就开始加载模型资源，并将结果缓存起来：
+
+javascript
+
+```
+import { useGLTF } from "@react-three/drei";
+
+export default function Model() {
+  const model = useGLTF("./hamburger-draco.glb");
+  return <primitive object={model.scene} scale={0.35} />;
+}
+
+// 预加载：在模块导入时或应用初始化时执行
+useGLTF.preload("./hamburger-draco.glb");
+```
+
+
+
+**预加载时机控制：**
+
+- 放在模块顶层：应用启动时自动预加载
+- 在useEffect中：路由变化或用户交互时预加载
+- 避免Suspense瀑布流问题，实现并行加载
+
+## Clone功能与性能分析
+
+javascript
+
+```
+import { Clone, useGLTF } from "@react-three/drei";
+
+export default function Model() {
+  const model = useGLTF("./hamburger-draco.glb");
+  return (
+    <>
+      <Clone object={model.scene} scale={0.35} position-x={-4} />
+      <Clone object={model.scene} scale={0.35} position-x={0} />
+      <Clone object={model.scene} scale={0.35} position-x={4} />
+    </>
+  );
+}
+
+useGLTF.preload("./hamburger-draco.glb");
+```
+
+
+
+### Clone组件的性能优势
+
+`Clone` 组件通过共享**几何体和材质**来提升性能：
+
+| 方法     | 内存使用           | 性能 | 适用场景          |
+| :------- | :----------------- | :--- | :---------------- |
+| `Clone`  | 几何体1份，材质1份 | 高   | 少量重复（<50个） |
+| 手动复用 | 几何体1份，材质1份 | 高   | 完全控制时        |
+| 直接使用 | 几何体N份，材质N份 | 低   | 不推荐            |
+
+**注意：** 对于大量重复模型（>50个），应使用GPU实例化（`Instances` + `Instance`）以获得最佳性能。
+
+## 将gltf模型转化为fiber组件
+
+使用工具将gltf模型转换为可操作的React组件：
+
+- [gltfjsx GitHub](https://github.com/pmndrs/gltfjsx)
+- [gltfjsx在线转换](https://gltf.pmnd.rs/)
+
+转换后的组件可以单独操作模型的各个部分：
+
+javascript
+
+```
+// 转换生成的组件
+export default function Hamburger(props) {
+  const { nodes, materials } = useGLTF('/hamburger.glb')
+  return (
+    <group {...props} dispose={null}>
+      <mesh geometry={nodes.topBun.geometry} material={materials.BunMaterial} />
+      <mesh geometry={nodes.meat.geometry} material={materials.SteakMaterial} />
+      <mesh geometry={nodes.cheese.geometry} material={materials.CheeseMaterial} />
+    </group>
+  )
+}
+```
+
+
+
+**阴影问题解决（导入后可能会出现阴影问题，例如面包伪影）：**
+
+javascript
+
+```
+<directionalLight
+  castShadow
+  position={[1, 2, 3]}
+  intensity={1.5}
+  shadow-normalBias={0.04}  // 解决阴影问题
+/>
+```
+
+
+
+## useAnimations实现模型动画
+
+### 基本动画播放
+
+javascript
+
+```
+import { useAnimations, useGLTF } from "@react-three/drei";
+import { useEffect } from "react";
+
+export default function Fox() {
+  const fox = useGLTF("./Fox/glTF/Fox.gltf");
+  const animations = useAnimations(fox.animations, fox.scene);
+
+  useEffect(() => {
+    const action = animations.actions.Run;
+    action.play();
+
+    setTimeout(() => {
+      animations.actions.Walk.play();
+      animations.actions.Walk.crossFadeFrom(animations.actions.Run, 1);
+    }, 2000);
+  }, []);
+  
+  return <primitive object={fox.scene} scale={0.02} />;
+}
+```
+
+
+
+### 动画切换与过渡
+
+javascript
+
+```
+import { useAnimations, useGLTF } from "@react-three/drei";
+import { useEffect } from "react";
+import { useControls } from "leva";
+
+export default function Fox() {
+  const fox = useGLTF("./Fox/glTF/Fox.gltf");
+  const animations = useAnimations(fox.animations, fox.scene);
+
+  const { animationName } = useControls({
+    animationName: { options: animations.names },
+  });
+  
+  useEffect(() => {
+    const action = animations.actions[animationName];
+    action.reset().fadeIn(0.5).play();
+
+    return () => {
+      action.fadeOut(0.5);
+    };
+  }, [animationName]);
+
+  return <primitive object={fox.scene} scale={0.02} />;
+}
+```
+
+
+
+### 动画方法说明
+
+这些方法是Three.js `AnimationAction` 类提供的：
+
+- `reset()` - 重置动画到第一帧
+- `fadeIn(duration)` - 淡入动画（duration秒内从0到1）
+- `fadeOut(duration)` - 淡出动画（duration秒内从1到0）
+- `crossFadeFrom(otherAction, duration)` - 从其他动画过渡
+- `play()` / `stop()` - 播放/停止动画
+
