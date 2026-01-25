@@ -3021,3 +3021,902 @@ export default function Fox() {
 - `crossFadeFrom(otherAction, duration)` - 从其他动画过渡
 - `play()` / `stop()` - 播放/停止动画
 
+
+
+# P62 3D Text-mask
+
+## 一、3D 文字实现基础
+
+### 1. **字体转换的必要性**
+
+**问题：为什么必须转换字体格式？**
+
+- Three.js 的 TextGeometry 需要预解析的字体数据
+- 浏览器无法直接解析 .ttf/.otf 文件生成 3D 几何体
+- JSON 格式包含了字符的矢量路径数据，可直接用于生成网格
+
+javascript
+
+```
+// ❌ 不能直接使用 TTF/OTF 文件
+// 这会报错：无法解析字体文件
+
+// ✅ 必须使用转换后的 JSON 格式
+import helvetiker from 'three/examples/fonts/helvetiker_regular.typeface.json';
+```
+
+
+
+### 2. **字体转换工具：facetype.js**
+
+**网站用途**：https://gero3.github.io/facetype.js/
+
+- 将常规字体文件 (.ttf/.otf/.woff) 转换为 Three.js 可用的 JSON 格式
+- 提供在线预览和下载
+
+**转换原因**：
+
+1. **性能优化**：预解析减少运行时开销
+2. **兼容性**：避免浏览器字体加载的 CORS 问题
+3. **文件控制**：可以选择只包含需要的字符集
+
+### 3. **基本 3D 文字实现**
+
+**Center 组件**
+
+```jsx
+<Center>
+  <Text3D>居中文字</Text3D>
+</Center>
+```
+
+**Text3D 组件**
+
+```jsx
+import { Canvas } from '@react-three/fiber';
+import { Center, Text3D, OrbitControls } from '@react-three/drei';
+
+export default function Experience() {
+  return (
+    <Canvas camera={{ position: [0, 0, 10] }}>
+      <OrbitControls makeDefault />
+      
+      <Center>
+        <Text3D 
+          font="./fonts/helvetiker_regular.typeface.json"
+          size={0.75}
+          height={0.2}
+          curveSegments={12}
+        >
+          HELLO R3F
+          <meshNormalMaterial />
+        </Text3D>
+      </Center>
+    </Canvas>
+  );
+}
+```
+
+
+
+### 4. **Text3D 配置详解**
+
+Text3D 的配置与 **Three.js 的 TextGeometry** 完全一致：
+
+jsx
+
+```
+<Text3D
+  font="./fonts/helvetiker_regular.typeface.json"
+  size={0.75}                    // 字体大小
+  height={0.2}                   // 挤出高度
+  curveSegments={12}             // 曲线细分
+  bevelEnabled={true}            // 启用斜面
+  bevelThickness={0.02}          // 斜面厚度
+  bevelSize={0.02}               // 斜面大小
+  bevelOffset={0}                // 斜面偏移
+  bevelSegments={5}              // 斜面分段
+>
+```
+
+
+
+## 二、材质和纹理
+
+### 1. **Matcap 纹理使用**
+
+jsx
+
+```
+import { useMatcapTexture } from '@react-three/drei';
+
+export default function Experience() {
+  // 参数1: 纹理索引 (0-1023)
+  // 参数2: 纹理大小 (64, 128, 256, 512, 1024)
+  const [matcap, url] = useMatcapTexture(0, 1024);
+  
+  return (
+    <Text3D font="./fonts/helvetiker_regular.typeface.json">
+      HELLO R3F
+      <meshMatcapMaterial matcap={matcap} />
+    </Text3D>
+  );
+}
+```
+
+
+
+**注意**：Matcap 纹理来自 Emmelleppi 的仓库：https://github.com/emmelleppi/matcaps
+
+### 2. **纹理更新问题**
+
+jsx
+
+```
+import { useEffect } from 'react';
+import * as THREE from 'three';
+
+export default function Experience() {
+  const [matcap] = useMatcapTexture(0, 1024);
+  
+  useEffect(() => {
+    if (matcap) {
+      // 设置正确的编码格式
+      matcap.encoding = THREE.sRGBEncoding;
+      // 标记纹理需要更新
+      matcap.needsUpdate = true;
+      
+      material.matcap = matcap;
+    	material.needsUpdate = true;
+    }
+  }, [matcap]);
+  
+  return (
+    // JSX 内容
+  );
+}
+```
+
+
+
+## 三、性能优化：创建 100 个甜甜圈
+
+### 1. **初始实现（性能较差）**
+
+jsx
+
+```
+{Array(100).fill(null).map((_, index) => (
+  <mesh
+    key={index}
+    position={[
+      (Math.random() - 0.5) * 10,
+      (Math.random() - 0.5) * 10,
+      (Math.random() - 0.5) * 10,
+    ]}
+    scale={0.2 + Math.random() * 0.2}
+    rotation={[Math.random() * Math.PI, Math.random() * Math.PI, 0]}
+  >
+    <torusGeometry args={[1, 0.6, 16, 32]} />
+    <meshNormalMaterial />
+  </mesh>
+))}
+```
+
+
+
+**问题**：每个 mesh 都创建新的几何体和材质实例，性能开销大。
+
+### 2. **优化方案一：共享实例（useRef/useState）**
+
+jsx
+
+```
+import { useRef, useState } from 'react';
+
+export default function Experience() {
+  const [torusGeometry, setTorusGeometry] = useState();
+  const [material, setMaterial] = useState();
+  
+  return (
+    <>
+      {/* 创建共享的几何体和材质 */}
+      <torusGeometry ref={setTorusGeometry} args={[1, 0.6, 16, 32]} />
+      <meshNormalMaterial ref={setMaterial} />
+      
+      {/* 所有 mesh 共享同一个几何体和材质 */}
+      {Array(100).fill(null).map((_, index) => (
+        <mesh
+          key={index}
+          geometry={torusGeometry}
+          material={material}
+          position={[
+            (Math.random() - 0.5) * 10,
+            (Math.random() - 0.5) * 10,
+            (Math.random() - 0.5) * 10,
+          ]}
+          scale={0.2 + Math.random() * 0.2}
+          rotation={[Math.random() * Math.PI, Math.random() * Math.PI, 0]}
+        />
+      ))}
+    </>
+  );
+}
+```
+
+
+
+### 3. **优化方案二：外部定义（最简单）**
+
+jsx
+
+```
+import * as THREE from 'three';
+
+// 在组件外部创建，避免重复实例化
+const torusGeometry = new THREE.TorusGeometry(1, 0.6, 16, 32);
+const material = new THREE.MeshNormalMaterial();
+
+export default function Experience() {
+  return (
+    <>
+      {Array(100).fill(null).map((_, index) => (
+        <mesh
+          key={index}
+          geometry={torusGeometry}
+          material={material}
+          position={[
+            (Math.random() - 0.5) * 10,
+            (Math.random() - 0.5) * 10,
+            (Math.random() - 0.5) * 10,
+          ]}
+          scale={0.2 + Math.random() * 0.2}
+          rotation={[Math.random() * Math.PI, Math.random() * Math.PI, 0]}
+        />
+      ))}
+    </>
+  );
+}
+```
+
+
+
+### 4. **更好的数组创建方式**
+
+jsx
+
+```
+// 方式1: Array.from()（推荐）
+{Array.from({ length: 100 }, (_, index) => (
+  <mesh key={index}>...</mesh>
+))}
+
+// 方式2: 使用 useMemo 缓存
+import { useMemo } from 'react';
+
+const meshes = useMemo(() => 
+  Array.from({ length: 100 }, (_, index) => (
+    <mesh key={index}>...</mesh>
+  ))
+, []);
+```
+
+
+
+## 四、添加动画
+
+### 1. **使用 useFrame 实现动画**
+
+jsx
+
+```
+import { useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
+
+export default function Experience() {
+  const donutsGroup = useRef();
+  
+  useFrame((state, delta) => {
+    // delta: 距离上一帧的时间（秒），用于平滑动画
+    if (donutsGroup.current) {
+      for (const donut of donutsGroup.current.children) {
+        // 每个甜甜圈绕 Y 轴旋转
+        donut.rotation.y += delta * 0.2;
+      }
+    }
+  });
+  
+  return (
+    <group ref={donutsGroup}>
+      {Array(100).fill(null).map((_, index) => (
+        <mesh key={index}>...</mesh>
+      ))}
+    </group>
+  );
+}
+```
+
+
+
+## 五、InstancedMesh 深度优化
+
+### **方案0：原始共享几何体方案**
+
+jsx
+
+```
+// 方案0：共享几何体（原始笔记方案）
+const torusGeometry = new THREE.TorusGeometry(1, 0.6, 16, 32);
+const material = new THREE.MeshNormalMaterial();
+
+export default function Experience() {
+  return (
+    <>
+      {Array(100).fill(null).map((_, index) => (
+        <mesh
+          key={index}
+          geometry={torusGeometry}
+          material={material}
+          position={[
+            (Math.random() - 0.5) * 10,
+            (Math.random() - 0.5) * 10,
+            (Math.random() - 0.5) * 10,
+          ]}
+          scale={0.2 + Math.random() * 0.2}
+          rotation={[Math.random() * Math.PI, Math.random() * Math.PI, 0]}
+        />
+      ))}
+    </>
+  );
+}
+```
+
+
+
+## 六、方案 1：Three.js 原生 InstancedMesh（最底层）
+
+### **完整代码：**
+
+jsx
+
+```
+import { useEffect, useRef } from 'react';
+import * as THREE from 'three';
+import { useFrame } from '@react-three/fiber';
+
+export default function Experience() {
+  const instancedMeshRef = useRef();
+  const count = 100;
+  
+  // === 第一部分：初始化实例数据 ===
+  useEffect(() => {
+    if (!instancedMeshRef.current) return;
+    
+    // 创建临时矩阵和向量对象
+    const matrix = new THREE.Matrix4();
+    const position = new THREE.Vector3();
+    const quaternion = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+    
+    for (let i = 0; i < count; i++) {
+      // 设置随机位置
+      position.set(
+        (Math.random() - 0.5) * 10,  // X: -5 到 5
+        (Math.random() - 0.5) * 10,  // Y: -5 到 5
+        (Math.random() - 0.5) * 10   // Z: -5 到 5
+      );
+      
+      // 设置随机旋转（使用欧拉角）
+      quaternion.setFromEuler(
+        new THREE.Euler(
+          Math.random() * Math.PI,   // X 轴旋转
+          Math.random() * Math.PI,   // Y 轴旋转
+          0                          // Z 轴不旋转
+        )
+      );
+      
+      // 设置随机缩放
+      const s = 0.2 + Math.random() * 0.2;  // 0.2 到 0.4
+      scale.set(s, s, s);  // 均匀缩放
+      
+      // 组合矩阵：将位置、旋转、缩放组合成一个 4x4 矩阵
+      matrix.compose(position, quaternion, scale);
+      
+      // 设置第 i 个实例的矩阵
+      instancedMeshRef.current.setMatrixAt(i, matrix);
+    }
+    
+    // 重要：标记实例矩阵需要更新
+    instancedMeshRef.current.instanceMatrix.needsUpdate = true;
+  }, []);
+  
+  // === 第二部分：动画更新 ===
+  useFrame((state) => {
+    if (!instancedMeshRef.current) return;
+    
+    const time = state.clock.elapsedTime;  // 获取自渲染开始的时间（秒）
+    const matrix = new THREE.Matrix4();
+    const position = new THREE.Vector3();
+    const quaternion = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+    
+    for (let i = 0; i < count; i++) {
+      // 1. 获取当前实例的矩阵
+      instancedMeshRef.current.getMatrixAt(i, matrix);
+      
+      // 2. 分解矩阵：从矩阵中提取位置、旋转、缩放
+      matrix.decompose(position, quaternion, scale);
+      
+      // 3. 更新旋转
+      // 创建一个新的欧拉角：绕 Y 轴随时间旋转，每个实例有不同的偏移
+      const rotation = new THREE.Euler(0, time * 0.5 + i * 0.01, 0);
+      
+      // 将欧拉角转换为四元数（因为矩阵使用四元数表示旋转）
+      quaternion.setFromEuler(rotation);
+      
+      // 4. 重新组合矩阵
+      matrix.compose(position, quaternion, scale);
+      
+      // 5. 更新实例矩阵
+      instancedMeshRef.current.setMatrixAt(i, matrix);
+    }
+    
+    // 标记矩阵需要更新
+    instancedMeshRef.current.instanceMatrix.needsUpdate = true;
+  });
+  
+  // === 第三部分：渲染 ===
+  return (
+    <instancedMesh
+      ref={instancedMeshRef}
+      args={[null, null, count]}  // 参数：[几何体, 材质, 实例数量]
+    >
+      <torusGeometry args={[1, 0.6, 16, 32]} />
+      <meshNormalMaterial />
+    </instancedMesh>
+  );
+}
+```
+
+
+
+### **关键概念详解：**
+
+#### **1. 为什么使用矩阵（Matrix4）？**
+
+在 3D 图形中，每个对象的变换（位置、旋转、缩放）可以用一个 4x4 矩阵表示：
+
+text
+
+```
+[ scaleX * rotation   positionX ]
+[ scaleY * rotation   positionY ]
+[ scaleZ * rotation   positionZ ]
+[       0 0 0           1       ]
+```
+
+
+
+- InstancedMesh 使用矩阵数组来存储所有实例的变换
+- 每个实例只需要一个 4x4 矩阵，而不是分开的位置、旋转、缩放
+
+#### **2. matrix.decompose() 和 matrix.compose()**
+
+javascript
+
+```
+// compose：将位置、旋转、缩放组合成矩阵
+matrix.compose(position, quaternion, scale);
+
+// decompose：从矩阵中提取位置、旋转、缩放
+matrix.decompose(position, quaternion, scale);
+```
+
+
+
+**为什么需要分解？**
+
+- 在动画中，我们可能需要修改某个变换（如只改旋转，不改位置）
+- 从矩阵中提取出现有的位置、缩放
+- 修改旋转后，再重新组合成新矩阵
+
+#### **3. THREE.Euler 和 setFromEuler**
+
+javascript
+
+```
+// 欧拉角：用三个角度表示旋转（弧度）
+// 参数顺序：X轴旋转，Y轴旋转，Z轴旋转
+const euler = new THREE.Euler(0.5, 1.0, 0);  // 单位：弧度
+
+// 四元数：另一种表示旋转的方式（避免万向节锁）
+const quaternion = new THREE.Quaternion();
+
+// 将欧拉角转换为四元数
+quaternion.setFromEuler(euler);
+```
+
+
+
+**为什么用四元数而不是欧拉角？**
+
+- 四元数在数学上更稳定，避免"万向节锁"
+- Three.js 内部使用四元数表示旋转
+- 矩阵的旋转部分使用四元数表示
+
+#### **4. needsUpdate = true**
+
+- Three.js 使用"标记更新"机制优化性能
+- 修改数据后，必须手动标记哪些部分需要更新
+- `instanceMatrix.needsUpdate = true` 告诉渲染器实例矩阵已更改
+
+## 七、方案 2：React Three Fiber 原生方式
+
+### **完整代码：**
+
+jsx
+
+```
+import { useRef, useMemo, useEffect } from 'react';
+import { useFrame } from '@react-three/fiber';
+import * as THREE from 'three';
+
+export default function Experience() {
+  const meshRef = useRef();
+  const count = 100;
+  
+  // === 优化：预计算初始数据，避免每次渲染都重新计算 ===
+  const initialTransforms = useMemo(() => {
+    const transforms = [];
+    
+    for (let i = 0; i < count; i++) {
+      transforms.push({
+        position: [
+          (Math.random() - 0.5) * 10,
+          (Math.random() - 0.5) * 10,
+          (Math.random() - 0.5) * 10
+        ],
+        scale: 0.2 + Math.random() * 0.2,
+        rotation: [Math.random() * Math.PI, Math.random() * Math.PI, 0],
+        // 存储每个实例的动画参数
+        speed: 0.5 + Math.random() * 0.5,
+        offset: Math.random() * Math.PI * 2
+      });
+    }
+    
+    return transforms;  // useMemo 确保只在 count 变化时重新计算
+  }, [count]);
+  
+  // === 初始化实例 ===
+  useEffect(() => {
+    if (!meshRef.current) return;
+    
+    const matrix = new THREE.Matrix4();
+    const position = new THREE.Vector3();
+    const quaternion = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+    
+    initialTransforms.forEach((transform, i) => {
+      // 从数组创建 THREE.Vector3
+      position.fromArray(transform.position);
+      
+      // 从数组创建 THREE.Euler，然后转换为四元数
+      quaternion.setFromEuler(
+        new THREE.Euler(
+          transform.rotation[0],  // X
+          transform.rotation[1],  // Y
+          transform.rotation[2]   // Z
+        )
+      );
+      
+      // 设置缩放（均匀缩放）
+      const s = transform.scale;
+      scale.set(s, s, s);
+      
+      // 组合矩阵
+      matrix.compose(position, quaternion, scale);
+      meshRef.current.setMatrixAt(i, matrix);
+    });
+    
+    // 标记更新
+    meshRef.current.instanceMatrix.needsUpdate = true;
+  }, [initialTransforms]);  // 依赖 initialTransforms
+  
+  // === 简化版动画：只更新旋转 ===
+  useFrame((state) => {
+    if (!meshRef.current) return;
+    
+    const time = state.clock.elapsedTime;
+    const matrix = new THREE.Matrix4();
+    const position = new THREE.Vector3();
+    const quaternion = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+    
+    // 遍历所有实例
+    for (let i = 0; i < count; i++) {
+      // 1. 获取当前矩阵
+      meshRef.current.getMatrixAt(i, matrix);
+      
+      // 2. 分解矩阵
+      matrix.decompose(position, quaternion, scale);
+      
+      // 3. 计算新的旋转
+      // 使用预存储的速度和偏移，使每个实例动画不同
+      const data = initialTransforms[i];
+      const angle = time * data.speed + data.offset;
+      
+      // 创建新的欧拉角（只绕Y轴旋转）
+      const rotation = new THREE.Euler(0, angle, 0);
+      
+      // 4. 更新四元数
+      quaternion.setFromEuler(rotation);
+      
+      // 5. 重新组合矩阵（位置和缩放不变）
+      matrix.compose(position, quaternion, scale);
+      
+      // 6. 更新实例
+      meshRef.current.setMatrixAt(i, matrix);
+    }
+    
+    // 标记更新
+    meshRef.current.instanceMatrix.needsUpdate = true;
+  });
+  
+  // === 渲染 ===
+  return (
+    <instancedMesh
+      ref={meshRef}
+      args={[null, null, count]}
+      // 这些属性会传递给 Three.js 的 InstancedMesh
+      castShadow={true}
+      receiveShadow={true}
+    >
+      <torusGeometry args={[1, 0.6, 16, 32]} />
+      <meshNormalMaterial />
+    </instancedMesh>
+  );
+}
+```
+
+
+
+### **关键优化点：**
+
+#### **1. useMemo 优化**
+
+javascript
+
+```
+const initialTransforms = useMemo(() => {
+  // 复杂的计算逻辑
+  return transforms;
+}, [count]);  // 只有 count 变化时才重新计算
+```
+
+
+
+- 避免每次渲染都重新生成随机数据
+- 提高性能，特别是在动画中
+
+#### **2. 存储动画参数**
+
+javascript
+
+```
+transforms.push({
+  position: [...],
+  scale: ...,
+  rotation: [...],
+  speed: 0.5 + Math.random() * 0.5,     // 每个实例的旋转速度
+  offset: Math.random() * Math.PI * 2    // 每个实例的旋转偏移
+});
+```
+
+
+
+- 将实例特定的参数与变换数据一起存储
+- 避免在动画循环中重复计算随机值
+
+#### **3. fromArray() 方法**
+
+javascript
+
+```
+// 从普通数组创建 THREE.Vector3
+position.fromArray([x, y, z]);
+
+// 对比：逐个设置
+position.x = x;
+position.y = y;
+position.z = z;
+```
+
+
+
+- 更简洁的代码
+- 性能略有提升
+
+## 八、方案 3：Drei Instances（最推荐）
+
+### **完整代码：**
+
+jsx
+
+```
+import { useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
+import { Instances, Instance } from '@react-three/drei';
+
+export default function Experience() {
+  const instancesRef = useRef();  // 引用整个 Instances 组件的所有实例
+  const count = 100;
+  
+  // === 预生成实例数据 ===
+  const instanceData = Array.from({ length: count }, (_, i) => ({
+    // 初始位置
+    position: [
+      (Math.random() - 0.5) * 10,
+      (Math.random() - 0.5) * 10,
+      (Math.random() - 0.5) * 10
+    ],
+    // 初始缩放
+    scale: 0.2 + Math.random() * 0.2,
+    // 初始旋转
+    rotation: [Math.random() * Math.PI, Math.random() * Math.PI, 0],
+    // 动画参数
+    speed: 0.5 + Math.random() * 0.5,      // 旋转速度
+    floatSpeed: 1 + Math.random() * 2,     // 浮动速度
+    floatOffset: Math.random() * Math.PI * 2 // 浮动偏移
+  }));
+  
+  // === 动画：直接操作 Instance 对象 ===
+  useFrame((state) => {
+    if (!instancesRef.current) return;
+    
+    const time = state.clock.elapsedTime;
+    
+    // 遍历所有 Instance 子对象
+    instancesRef.current.children.forEach((instance, i) => {
+      const data = instanceData[i];
+      
+      // 1. 旋转动画
+      // instance.rotation 是 THREE.Euler 对象
+      instance.rotation.y = time * data.speed;
+      
+      // 2. 浮动动画（上下运动）
+      const floatHeight = Math.sin(time * data.floatSpeed + data.floatOffset) * 0.5;
+      instance.position.y = data.position[1] + floatHeight;
+      
+      // 3. 缩放动画（呼吸效果）
+      const pulse = Math.sin(time * 2 + i) * 0.1 + 1;
+      instance.scale.setScalar(data.scale * pulse);
+    });
+  });
+  
+  // === 渲染 ===
+  return (
+    <Instances
+      ref={instancesRef}
+      // 重要参数：
+      limit={count}     // 预分配的最大实例数（内存分配）
+      range={count}     // 实际渲染的实例数（<= limit）
+      
+      // 可选参数：
+      frustumCulled={true}     // 是否启用视锥剔除（默认 true）
+      castShadow={true}        // 是否投射阴影
+      receiveShadow={true}     // 是否接收阴影
+      
+      // 事件处理：
+      onClick={(event) => {
+        // event.instanceId 可以获取点击的实例索引
+        console.log('点击了实例:', event.instanceId);
+      }}
+    >
+      {/* 共享的几何体 */}
+      <torusGeometry args={[1, 0.6, 16, 32]} />
+      
+      {/* 共享的材质 */}
+      <meshNormalMaterial />
+      
+      {/* 生成所有实例 */}
+      {instanceData.map((data, i) => (
+        <Instance
+          key={i}
+          // 基本变换属性（与普通 mesh 相同）
+          position={data.position}
+          scale={data.scale}
+          rotation={data.rotation}
+          
+          // 实例特定颜色（可选）
+          color={new THREE.Color().setHSL(i / count, 1, 0.5)}
+          
+          // 每个实例可以有独立的引用
+          ref={(ref) => {
+            // 可以在这里存储每个实例的引用
+            if (ref) {
+              // ref 是这个 Instance 对应的 Three.js 对象
+            }
+          }}
+        />
+      ))}
+    </Instances>
+  );
+}
+```
+
+
+
+### **关键概念详解：**
+
+#### **1. limit 和 range 参数**
+
+javascript
+
+```
+<Instances
+  limit={1000}    // 最大实例数（内存预分配）
+  range={100}     // 实际渲染的实例数
+>
+```
+
+
+
+- **limit**：预分配的内存大小
+  - 一次性分配足够内存给最多 1000 个实例
+  - 即使只渲染 100 个，也分配 1000 个的空间
+  - 后续可以动态增加实例数（最多到 1000）
+- **range**：实际渲染的数量
+  - 只渲染前 100 个实例
+  - 可以动态改变，实现实例的显示/隐藏
+
+#### **2. 动态改变实例数量**
+
+javascript
+
+```
+const [visibleCount, setVisibleCount] = useState(50);
+
+// 在 Instances 中
+<Instances limit={100} range={visibleCount}>
+  {/* 只渲染前 visibleCount 个 Instance */}
+  {instanceData.slice(0, visibleCount).map((data, i) => (
+    <Instance key={i} {...data} />
+  ))}
+</Instances>
+
+// 动态增加实例
+<button onClick={() => setVisibleCount(prev => Math.min(prev + 10, 100))}>
+  增加10个实例
+</button>
+```
+
+
+
+#### **3. Instance 对象的直接操作**
+
+javascript
+
+```
+// Instance 本质上是一个包装过的 Object3D
+instance.rotation.y += 0.01;      // 直接修改旋转
+instance.position.x += 0.1;       // 直接修改位置
+instance.scale.multiplyScalar(1.1); // 直接修改缩放
+
+// Drei 会自动同步这些修改到 InstancedMesh
+```
+
+
+
+## 九、三种方案对比表
+
+| 特性            | Three.js 原生 | R3F 原生     | Drei Instances |
+| :-------------- | :------------ | :----------- | :------------- |
+| **代码复杂度**  | ⭐⭐⭐⭐⭐         | ⭐⭐⭐          | ⭐              |
+| **性能**        | ⭐⭐⭐⭐⭐         | ⭐⭐⭐⭐         | ⭐⭐⭐            |
+| **可读性**      | ⭐             | ⭐⭐⭐          | ⭐⭐⭐⭐⭐          |
+| **控制粒度**    | ⭐⭐⭐⭐⭐         | ⭐⭐⭐⭐         | ⭐⭐⭐            |
+| **内存管理**    | 手动          | 半自动       | 自动           |
+| **动画更新**    | 手动矩阵操作  | 手动矩阵操作 | 直接修改属性   |
+| **needsUpdate** | 手动设置      | 手动设置     | 自动处理       |
+| **适合场景**    | 极限性能需求  | 常规大量对象 | 快速开发       |
+
