@@ -4121,3 +4121,357 @@ useFrame((state, delta) => {
 
 1. **复杂效果**：多个uniforms需要动态更新
 2. **TypeScript项目**：需要完整的类型支持
+
+
+
+
+
+# P64 Mouse Events
+
+## 一、基本点击事件
+
+### 1. 创建点击事件
+
+jsx
+
+```
+<mesh onClick={(event) => {
+  console.log('点击事件触发');
+}}>
+```
+
+
+
+### 2. event常用属性
+
+- `event.object`：实际被点击的Three.js对象
+- `event.eventObject`：事件绑定的React组件实例
+- `event.point`：世界坐标系中的点击位置（Vector3）
+- `event.uv`：UV坐标
+- `event.distance`：从相机到点击点的距离
+- `event.stopPropagation()`：阻止事件冒泡
+
+### 3. object vs eventObject
+
+jsx
+
+```
+<group onClick={(event) => {
+  console.log(event.object);      // 实际点击的mesh
+  console.log(event.eventObject); // group组件本身
+}}>
+  <mesh />
+</group>
+```
+
+
+
+## group onClick事件机制
+
+当你在group上添加onClick时：
+
+- **不是给每个mesh都添加事件**
+- 事件绑定在group的Three.js对象上
+- 当点击group内的mesh时，事件会冒泡到group
+- group的点击事件**会触发一次**，而不是每个mesh都触发
+
+## 二、各类鼠标事件
+
+### 1. 右键事件
+
+jsx
+
+```
+<mesh onContextMenu={(event) => {
+  event.preventDefault(); // 阻止浏览器默认菜单
+  console.log('右键点击');
+}}>
+```
+
+
+
+### 2. 鼠标按下事件
+
+jsx
+
+```
+<mesh onPointerDown={(event) => {
+  console.log(event.button); // 0:左键, 1:中键, 2:右键
+}}>
+```
+
+
+
+### 3. 悬停事件区别
+
+| 事件             | 冒泡 | 触发条件           |
+| :--------------- | :--- | :----------------- |
+| `onPointerOver`  | ✓    | 进入对象或其子对象 |
+| `onPointerEnter` | ✗    | 只进入该对象       |
+| `onPointerOut`   | ✓    | 离开对象或其子对象 |
+| `onPointerLeave` | ✗    | 只离开该对象       |
+
+### 4. miss事件，点在mesh外触发
+
+在canvas上点击空白处触发：
+
+jsx
+
+```
+<canvas
+  onPointerMissed={(event) => {
+    console.log('点击了空白区域');
+  }}
+/>
+```
+
+
+
+## 三、事件冒泡与优化
+
+### 1. 模型点击多次触发问题
+
+**原因**：模型内多个mesh都注册了事件
+**解决**：使用`event.stopPropagation()`
+
+jsx
+
+```
+// 方法1：在模型外层阻止
+<group onClick={(event) => {
+  event.stopPropagation();
+  console.log('只触发一次');
+}}>
+  <primitive object={model.scene} />
+</group>
+
+// 方法2：在事件中阻止
+<primitive object={model.scene} onClick={(event) => {
+  event.stopPropagation();
+}} />
+```
+
+
+
+### 2. 优化大量mesh的事件监听
+
+#### 方法1：使用事件委托
+
+jsx
+
+```
+<group onClick={(event) => {
+  event.stopPropagation();
+  // 通过event.object判断点击了哪个子元素
+  if (event.object.name === 'target') {
+    console.log('点击目标');
+  }
+}}>
+  {/* 其他99个mesh */}
+  <mesh name="target" />
+</group>
+```
+
+
+
+#### 方法2：使用射线检测优化
+
+jsx
+
+```
+const handleClick = useCallback((event) => {
+  const raycaster = new THREE.Raycaster();
+  const mouse = new THREE.Vector2();
+  
+  // 转换鼠标坐标
+  mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+  
+  raycaster.setFromCamera(mouse, camera);
+  const intersects = raycaster.intersectObjects(scene.children);
+  
+  if (intersects.length > 0 && intersects[0].object === targetMesh) {
+    console.log('点击目标mesh');
+  }
+}, []);
+```
+
+
+
+## 四、性能优化
+
+### 1. 更改鼠标样式
+
+jsx
+
+```
+<mesh
+  onPointerEnter={() => document.body.style.cursor = 'pointer'}
+  onPointerLeave={() => document.body.style.cursor = 'default'}
+/>
+```
+
+
+
+### 2. 注意性能影响
+
+- `onPointerOver`、`onPointerEnter`、`onPointerMove`等会在每一帧监听
+- 建议使用防抖或节流
+
+jsx
+
+```
+import { throttle } from 'lodash';
+
+const throttledHandler = throttle((event) => {
+  console.log('移动');
+}, 100);
+
+<mesh onPointerMove={throttledHandler} />
+```
+
+
+
+### 3. 包围球优化（只能在单个mesh上用，多个mesh要使用BVH）
+
+在mesh外加一个球形检测区域：
+
+jsx
+
+```
+const sphere = useMemo(() => new THREE.Sphere(), []);
+
+useEffect(() => {
+  if (meshRef.current) {
+    meshRef.current.geometry.computeBoundingSphere();
+    sphere.copy(meshRef.current.geometry.boundingSphere);
+  }
+}, []);
+
+<mesh ref={meshRef} onClick={(event) => {
+  const distance = event.point.distanceTo(sphere.center);
+  if (distance <= sphere.radius) {
+    console.log('点击有效');
+  }
+}}>
+```
+
+
+
+## 五、高级优化：BVH
+
+### 1. 什么是BVH？
+
+- **全称**：Bounding Volume Hierarchy（包围体层次结构）
+- **原理**：将复杂几何体分割成多个小包围盒，形成"俄罗斯套娃"结构
+- **优点**：大幅提升射线检测性能
+
+### 2. 使用BVH优化汉堡模型
+
+安装依赖
+
+`@react-three/drei`的`useBVH`实际上是对`three-mesh-bvh`的封装，所以需要先安装这个库。
+
+bash
+
+```
+npm install three-mesh-bvh
+```
+
+
+
+jsx
+
+```
+import { useRef } from 'react';
+import { useBVH, useGLTF } from '@react-three/drei';
+
+export default function Experience() {
+  const hamburger = useGLTF("./hamburger.glb");
+  const hamburgerRef = useRef();
+  
+  // ✅ 只需这一行！为汉堡添加BVH优化
+  useBVH(hamburgerRef);
+
+  return (
+    <primitive
+      ref={hamburgerRef}
+      object={hamburger.scene}
+      scale={0.25}
+      position-y={0.5}
+      onClick={(event) => {
+        console.log('汉堡点击');
+        event.stopPropagation();
+      }}
+    />
+  );
+}
+```
+
+
+
+### 3. 给汉堡的每个部分分别应用BVH
+
+jsx
+
+```
+import { useRef, useEffect } from 'react';
+import * as THREE from 'three';
+import { useGLTF } from '@react-three/drei';
+import { computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh';
+
+export default function Experience() {
+  const hamburger = useGLTF("./hamburger.glb");
+  
+  // 加载模型后，为每个mesh单独生成BVH
+  useEffect(() => {
+    hamburger.scene.traverse((child) => {
+      if (child.isMesh) {
+        // 检查geometry是否存在
+        if (child.geometry && !child.geometry.boundsTree) {
+          // 设置BVH计算方法
+          child.geometry.computeBoundsTree = computeBoundsTree;
+          child.geometry.disposeBoundsTree = disposeBoundsTree;
+          
+          // 计算BVH
+          child.geometry.computeBoundsTree();
+        }
+      }
+    });
+    
+    // 清理函数
+    return () => {
+      hamburger.scene.traverse((child) => {
+        if (child.isMesh && child.geometry && child.geometry.disposeBoundsTree) {
+          child.geometry.disposeBoundsTree();
+        }
+      });
+    };
+  }, [hamburger]);
+
+  return (
+    <>
+      {/* ... 其他代码 */}
+      
+      <primitive
+        object={hamburger.scene}
+        scale={0.25}
+        position-y={0.5}
+        onClick={(event) => {
+          console.log('汉堡点击');
+          event.stopPropagation();
+        }}
+      />
+    </>
+  );
+}
+```
+
+
+
+### 4. 整体BVH vs 部分BVH
+
+| 类型        | 优点             | 缺点               | 适用场景   |
+| :---------- | :--------------- | :----------------- | :--------- |
+| **整体BVH** | 简单、内存少     | 内部空区域也会检测 | 大多数情况 |
+| **部分BVH** | 更精确、局部更新 | 内存占用多、复杂   | 超复杂模型 |
