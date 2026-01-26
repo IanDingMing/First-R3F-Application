@@ -3920,3 +3920,204 @@ instance.scale.multiplyScalar(1.1); // 直接修改缩放
 | **needsUpdate** | 手动设置      | 手动设置     | 自动处理       |
 | **适合场景**    | 极限性能需求  | 常规大量对象 | 快速开发       |
 
+
+
+# P63 Portal Scene
+
+## 一、Fiber方法导入模型与纹理
+
+### 1. 模型导入 - `useGLTF`
+
+javascript
+
+```
+const { nodes, materials } = useGLTF("./model/portal.glb");
+```
+
+
+
+- **参数**：模型文件路径
+- **返回值**：包含模型节点(nodes)和材质(materials)的对象
+- **特点**：自动处理模型加载和缓存，避免重复加载
+
+### 2. 纹理导入 - `useTexture`
+
+javascript
+
+```
+const bakedTexture = useTexture("./model/baked.jpg");
+```
+
+
+
+- **参数**：纹理图片路径
+- **返回值**：THREE.Texture对象
+- **特点**：自动管理纹理加载状态和错误处理
+
+## 二、纹理Y轴反转的两种写法
+
+### 方法1：直接修改纹理对象
+
+javascript
+
+```
+bakedTexture.flipY = false;
+```
+
+
+
+### 方法2：在JSX中通过属性设置（推荐）
+
+javascript
+
+```
+<meshBasicMaterial map={bakedTexture} map-flipY={false} />
+```
+
+
+
+- **区别**：方法2更符合React Three Fiber的声明式编程风格
+
+## 三、Flat配置解析
+
+### 配置位置
+
+javascript
+
+```
+<Canvas flat dpr={2} ...>
+```
+
+
+
+### flat配置的含义
+
+- **作用**：控制渲染器的输出编码方式
+- **Three.js默认**：使用sRGB颜色空间处理颜色，这会让颜色更鲜艳
+- **flat: true**：禁用sRGB处理，使用线性颜色空间，颜色更准确
+- **为什么感觉没变化**：
+  1. 现代浏览器和显卡已优化颜色处理
+  2. 场景中如果有Environment、Sky等组件会自动调整颜色
+  3. 如果使用ACESFilmicToneMapping等后期效果，差异不明显
+
+### 建议使用场景
+
+- 需要精确颜色控制的场景（如产品展示）
+- 物理准确渲染(PBR)时推荐启用
+- 艺术性场景可根据需要选择
+
+## 四、Sparkles添加萤火虫效果
+
+### 基本用法
+
+javascript
+
+```
+<Sparkles
+  size={6}          // 粒子大小
+  scale={[4, 2, 4]} // 缩放范围
+  position-y={1}    // Y轴位置
+  speed={0.2}       // 动画速度
+  count={40}        // 粒子数量
+/>
+```
+
+
+
+### 常用参数
+
+- `color`：粒子颜色
+- `noise`：噪声值，使粒子分布更自然
+- `opacity`：透明度
+- `speed`：移动速度
+
+## 五、传送门Shader的两种实现方法
+
+### 方法1：使用drei的`shaderMaterial`
+
+javascript
+
+```
+import { shaderMaterial } from "@react-three/drei";
+
+const PortalMaterial = shaderMaterial(
+  // Uniforms
+  {
+    uTime: 0,
+    uColorStart: new THREE.Color("#ffffff"),
+    uColorEnd: new THREE.Color("#000000"),
+  },
+  // Vertex Shader
+  portalVertexShader,
+  // Fragment Shader
+  portalFragmentShader
+);
+
+// 扩展Three.js
+extend({ PortalMaterial });
+
+// 使用
+<portalMaterial ref={portalMaterial} />
+```
+
+
+
+**问题：为什么Drei的`shaderMaterial`可以直接传入变量，而不需要指定`vertexShader:`这样的键名？**
+
+**答案**：这是函数式调用和JSX属性两种不同模式的差异。Drei的`shaderMaterial`是函数调用，参数按位置传递：
+
+- 第1个参数：uniforms对象
+- 第2个参数：顶点着色器字符串
+- 第3个参数：片元着色器字符串
+
+变量名只是对导入的GLSL字符串的引用，重要的是字符串内容。函数内部将第2个参数作为`vertexShader`，第3个参数作为`fragmentShader`。
+
+### 方法2：使用原生的`shaderMaterial`
+
+javascript
+
+```
+<shaderMaterial
+  vertexShader={portalVertexShader}
+  fragmentShader={portalFragmentShader}
+  uniforms={{
+    uTime: { value: 0 },
+    uColorStart: { value: new THREE.Color("#ffffff") },
+    uColorEnd: { value: new THREE.Color("#000000") },
+  }}
+/>
+```
+
+
+
+**问题：使用原生`shaderMaterial`时，如何更新uTime？**
+
+**答案**：通过ref访问uniforms对象，然后更新其value属性：
+
+javascript
+
+```
+const portalMaterialRef = useRef();
+useFrame((state, delta) => {
+  portalMaterialRef.current.uniforms.uTime.value += delta;
+});
+```
+
+
+
+## 六、两种ShaderMaterial的区别与选择
+
+### 问题：两种ShaderMaterial的方法看起来差别不大，甚至觉得原生的更简单？
+
+**答案**：对于简单场景确实差别不大，但复杂场景下Drei方式优势明显。
+
+### 选择建议（最终指南）
+
+#### 选择原生`shaderMaterial`的情况：
+
+1. **极简场景**：只有1-2个静态uniforms，不需要更新
+
+#### 选择Drei`shaderMaterial`的情况：
+
+1. **复杂效果**：多个uniforms需要动态更新
+2. **TypeScript项目**：需要完整的类型支持
