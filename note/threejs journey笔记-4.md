@@ -1,4 +1,4 @@
-# P57 First R3F Application
+# P57 First R3F Application 
 
 ## 一、@react-three/fiber 核心方法详解
 
@@ -2351,7 +2351,7 @@ javascript
 
 
 
-# P60 Environment and Staging
+# P60 Environment and Staging 环境和舞台
 
 ------
 
@@ -2773,7 +2773,7 @@ import { Stage } from ‘@react-three/drei’;
 
 
 
-# P61 Load Models
+# P61 Load Models 加载模型
 
 ## 加载gltf模型
 
@@ -3023,7 +3023,7 @@ export default function Fox() {
 
 
 
-# P62 3D Text-mask
+# P62 3D Text-mask 文字场景
 
 ## 一、3D 文字实现基础
 
@@ -3922,7 +3922,7 @@ instance.scale.multiplyScalar(1.1); // 直接修改缩放
 
 
 
-# P63 Portal Scene
+# P63 Portal Scene 传送门场景
 
 ## 一、Fiber方法导入模型与纹理
 
@@ -4126,7 +4126,7 @@ useFrame((state, delta) => {
 
 
 
-# P64 Mouse Events
+# P64 Mouse Events 鼠标事件
 
 ## 一、基本点击事件
 
@@ -4475,3 +4475,748 @@ export default function Experience() {
 | :---------- | :--------------- | :----------------- | :--------- |
 | **整体BVH** | 简单、内存少     | 内部空区域也会检测 | 大多数情况 |
 | **部分BVH** | 更精确、局部更新 | 内存占用多、复杂   | 超复杂模型 |
+
+# P65 Post-Processing 后期处理react
+
+## 一、基础概念
+
+### 1. Postprocessing 是什么？
+
+[Post Processing Doc](https://pmndrs.github.io/postprocessing/public/docs/)
+
+- 基于 Three.js 的后期处理库
+- 提供各种屏幕空间效果（Bloom、Vignette、Glitch 等）
+- 使用 WebGL 着色器实现，性能优秀
+
+### 2. 为什么需要安装两个包？
+
+必须安装两个包：
+
+- `@react-three/postprocessing`: React 封装组件
+- `postprocessing`: 核心库
+
+json
+
+```
+{
+  "dependencies": {
+    "@react-three/postprocessing": "2.15.13",
+    "postprocessing": "6.35.6"
+  }
+}
+```
+
+
+
+### 3. 稳定版本组合（解决冲突的关键）
+
+推荐版本组合：
+
+json
+
+```
+{
+  "three": "0.160.0",
+  "@react-three/fiber": "8.15.8",
+  "@react-three/drei": "9.88.7",
+  "@react-three/postprocessing": "2.15.13",
+  "postprocessing": "6.35.6",
+  "r3f-perf": "6.6.3"
+}
+```
+
+
+
+**使用 resolutions 强制统一版本**：
+
+json
+
+```
+{
+  "resolutions": {
+    "postprocessing": "6.35.6",
+    "three": "0.160.0"
+  }
+}
+```
+
+
+
+## 二、EffectComposer 基本用法
+
+### 1. 基本使用
+
+`EffectComposer` 是后期处理的容器，管理所有效果的渲染顺序和组合：
+
+javascript
+
+```
+import { EffectComposer } from "@react-three/postprocessing";
+
+<EffectComposer
+  multisampling={8}          // 抗锯齿采样次数（0-16）
+  disableNormalPass={true}   // 禁用不需要的法线通道
+  depthBuffer={true}         // 启用深度缓冲
+  stencilBuffer={false}      // 禁用模板缓冲（通常不需要）
+>
+  {/* 后期效果按顺序添加 */}
+  <Bloom />
+  <Vignette />
+</EffectComposer>
+```
+
+
+
+#### EffectComposer 渲染流程：
+
+text
+
+```
+原始场景渲染 → 效果1 → 效果2 → ... → 最终输出
+```
+
+
+
+效果按添加顺序执行，后一个效果接收前一个效果的输出。
+
+### 2. EffectComposer 配置参数
+
+#### multisampling（多重采样）
+
+- **作用**：抗锯齿，消除图像锯齿边缘
+- **值**：
+  - `0`：关闭（性能最好，可能有锯齿）
+  - `8`：平衡质量和性能（推荐）
+  - `16`：高质量（性能开销大）
+
+#### disableNormalPass（禁用法线通道）
+
+- **作用**：禁用法线纹理生成，优化性能
+- **何时使用**：如果不使用 SSR、DepthOfField 等需要法线信息的特效
+- **为什么需要**：某些版本可能因法线纹理问题崩溃，禁用可避免
+
+## 三、常用后期处理效果详解
+
+### 1. 导入和引用来源
+
+**GlitchMode 和 BlendFunction** 来自 `postprocessing` 核心库：
+
+javascript
+
+```
+import { 
+  GlitchMode,      // 故障效果的模式枚举
+  BlendFunction,   // 混合函数枚举
+  Effect           // 自定义效果的基类
+} from "postprocessing";
+```
+
+
+
+这些是 `postprocessing` 库定义的枚举和类，不是 React 特有的。
+
+### 2. Vignette（暗角）
+
+javascript
+
+```
+<Vignette
+  offset={0.3}        // 暗角偏移，值越大暗角越小
+  darkness={0.9}      // 暗角黑暗程度（0-1）
+  blendFunction={BlendFunction.NORMAL}
+/>
+```
+
+
+
+**注意**：如果左上/右上不显示黑角，添加背景色：
+
+javascript
+
+```
+<color args={["#ffffff"]} attach="background" />
+```
+
+
+
+### 3. Glitch（故障效果）
+
+javascript
+
+```
+<Glitch
+  delay={[0.5, 1]}           // 触发延迟范围（秒）
+  duration={[0.1, 0.3]}      // 持续时间范围
+  strength={[0.2, 0.4]}      // 强度范围
+  mode={GlitchMode.CONSTANT_MILD}
+/>
+```
+
+
+
+#### GlitchMode 模式：
+
+| 模式            | 效果     | 说明           |
+| :-------------- | :------- | :------------- |
+| `DISABLED`      | 禁用     | 无故障效果     |
+| `SPORADIC`      | 零星出现 | 随机间隔触发   |
+| `CONSTANT_MILD` | 持续轻微 | 持续但强度较小 |
+| `CONSTANT_WILD` | 持续强烈 | 持续且强度较大 |
+
+### 4. Noise（噪波）
+
+javascript
+
+```
+<Noise 
+  premultiply={true}                    // 预乘（通常为true）
+  blendFunction={BlendFunction.SOFT_LIGHT}
+/>
+```
+
+
+
+### 5. BlendFunction（混合模式）详解
+
+控制效果如何与原始图像混合：
+
+| 模式         | 效果             | 适用场景       |
+| :----------- | :--------------- | :------------- |
+| `NORMAL`     | 正常叠加         | 大多数效果     |
+| `ADD`        | 加法混合（变亮） | 发光效果、光晕 |
+| `MULTIPLY`   | 乘法混合（变暗） | 暗角、阴影     |
+| `SCREEN`     | 滤色混合（变亮） | 柔光、辉光     |
+| `OVERLAY`    | 叠加混合         | 增加对比度     |
+| `SOFT_LIGHT` | 柔光混合         | 自然光影效果   |
+| `DARKEN`     | 变暗混合         | 暗角效果       |
+| `LIGHTEN`    | 变亮混合         | 高光增强       |
+
+### 6. Bloom（辉光） - 重点！
+
+#### 工作原理：
+
+1. 提取亮部（根据亮度阈值）
+2. 高斯模糊处理
+3. 叠加回原图
+
+#### 正确使用方法：
+
+**最佳实践：使用自发光材质**
+
+javascript
+
+```
+// 物体材质
+<meshStandardMaterial 
+  color="orange"
+  emissive="orange"          // 自发光颜色
+  emissiveIntensity={2}      // 自发光强度
+/>
+
+// Bloom 配置
+<Bloom
+  intensity={1.0}           // 强度（0-3）
+  luminanceThreshold={0.9}  // 亮度阈值（0-1，值越高只有越亮部分发光）
+  luminanceSmoothing={0.025} // 亮度平滑度
+  mipmapBlur={true}         // 使用Mipmap模糊（性能更好）
+  radius={0.85}             // 模糊半径（0-1）
+/>
+```
+
+
+
+#### 为什么 Bloom 需要配合？
+
+- Bloom 作用于**场景中的亮点区域**
+- 亮点来源：
+  1. 自发光材质（最稳定）
+  2. 高颜色值 + `toneMapped={false}`（可能不稳定）
+  3. 强光源照射的高光区域
+
+#### 常见问题解决：
+
+**问题**：看不到 Bloom 效果
+**原因及解决**：
+
+1. 亮度阈值太高 → 降低 `luminanceThreshold`
+2. Bloom 强度太低 → 增加 `intensity`
+3. 场景没有亮点 → 添加自发光或增强光照
+
+#### **材质与 Bloom 的关系**：
+
+##### **情况1：StandardMaterial + **高颜色值 + 关闭色调映射**（不推荐）**
+
+javascript
+
+```
+javascript
+<mesh>
+  <boxGeometry />
+  <meshStandardMaterial 
+    color={[5, 2, 1]}        // 颜色值 > 1
+    toneMapped={false}       // 关闭色调映射
+  />
+</mesh>
+```
+
+
+
+- `toneMapped={false}` 可以显示超亮颜色
+- 但Three.js默认色调映射会压缩颜色范围
+- 效果不稳定，不同渲染器表现不同
+
+##### **情况2：StandardMaterial + 自发光（推荐）**
+
+javascript
+
+```
+<mesh>
+  <boxGeometry />
+  <meshStandardMaterial 
+    color="blue"
+    emissive="blue"          // 自发光颜色
+    emissiveIntensity={2}    // 自发光强度
+  />
+</mesh>
+```
+
+
+
+- **最佳实践！**
+- 自发光不受光照影响
+- Bloom 能稳定提取自发光区域
+- 控制 `emissiveIntensity` 调整亮度
+
+##### **情况3：**BasicMaterial（不受光照影响）**
+
+javascript
+
+```
+<mesh>
+  <boxGeometry />
+  <meshBasicMaterial 
+    color={[3, 1, 0.5]}      // 颜色值 > 1
+    toneMapped={false}
+  />
+</mesh>
+```
+
+
+
+- 不受光照影响
+- 但缺少物理材质特性
+- 适合简单发光体
+
+##### 情况4：**强光源照射**
+
+javascript
+
+```
+<mesh>
+  <boxGeometry />
+  <meshStandardMaterial 
+    color="white"
+    metalness={0.9}          // 高金属度
+    roughness={0.1}          // 低粗糙度（镜面反射）
+  />
+</mesh>
+<directionalLight intensity={10} position={[5, 5, 5]} />
+```
+
+
+
+通过强烈的镜面高光产生亮部。
+
+#### **推荐的 Bloom 设置**：
+
+javascript
+
+```
+// 设置1：柔和辉光
+<Bloom
+  intensity={0.5}
+  luminanceThreshold={0.4}
+  luminanceSmoothing={0.9}
+/>
+
+// 设置2：强烈发光
+<Bloom
+  intensity={1.5}
+  luminanceThreshold={0.1}  // 低阈值，更多区域发光
+  luminanceSmoothing={0.1}   // 锐利过渡
+/>
+```
+
+### 7. DepthOfField（景深）
+
+javascript
+
+```
+<DepthOfField
+  focusDistance={0.025}    // 焦点距离（0-1，归一化）
+  focalLength={0.025}      // 焦距（控制清晰范围）
+  bokehScale={6}           // 散景（模糊光斑）大小
+/>
+```
+
+
+
+### 8. SSR（屏幕空间反射）
+
+javascript
+
+```
+<SSR
+  intensity={1}           // 反射强度
+  exponent={1}            // 反射衰减指数
+  distance={10}           // 最大反射距离
+  fade={10}               // 边缘衰减距离
+  roughnessFade={1}       // 粗糙度衰减
+  thickness={10}          // 物体厚度检测
+  ior={1.45}              // 折射率
+  maxRoughness={1}        // 最大粗糙度（超过此值不反射）
+  maxDepthDifference={10} // 最大深度差
+/>
+```
+
+
+
+**限制**：只能反射屏幕内可见的内容
+
+## 四、自定义后期处理
+
+### 1. 自定义 Effect 的核心方法
+
+#### **mainUv 和 mainImage 函数**
+
+这两个是 `postprocessing` 框架规定的**入口函数**，在着色器编译时会被识别：
+
+javascript
+
+```
+const fragmentShader = /* glsl */ `
+    // 1. mainUv: 处理UV坐标（可选）
+    // 在片段着色器执行前调用，可以修改UV坐标
+    void mainUv(inout vec2 uv) {
+        // uv: 输入/输出的纹理坐标
+        // 可以在这里做UV扭曲、偏移等操作
+        uv.x += sin(uv.y * 10.0) * 0.1;
+    }
+    
+    // 2. mainImage: 处理颜色（必需）
+    // 这是主要的片段着色器函数
+    void mainImage(const in vec4 inputColor,  // 输入颜色（来自上一个效果）
+                   const in vec2 uv,          // 纹理坐标
+                   out vec4 outputColor) {    // 输出颜色
+        // 处理逻辑
+        outputColor = inputColor;
+    }
+`;
+```
+
+
+
+#### **为什么是这些参数？**
+
+- 这是 `postprocessing` 框架的**约定**，类似于 Three.js 的着色器块
+- 框架会自动提供这些参数并调用相应函数
+- 保持一致性，便于框架管理和优化
+
+### 2. blendFunction 在自定义效果中的作用
+
+`blendFunction` 定义你的效果如何与原始图像（或上一个效果）混合：
+
+javascript
+
+```
+export default class DrunkEffect extends Effect {
+  constructor({ blendFunction = BlendFunction.NORMAL }) {
+    super("DrunkEffect", fragmentShader, {
+      blendFunction,  // 指定混合模式
+      uniforms: new Map([...])
+    });
+  }
+}
+```
+
+
+
+**为什么需要配置 blendFunction？**
+
+- 控制效果的混合行为（叠加、变亮、变暗等）
+- 决定效果是**替换**原图还是**叠加**在原图上
+- 默认使用 `BlendFunction.NORMAL`（正常替换）
+
+#### **混合模式选择指南：**
+
+javascript
+
+```
+// 1. 替换模式（完全替换原图）
+blendFunction: BlendFunction.NORMAL
+
+// 2. 叠加模式（效果叠加在原图上）
+blendFunction: BlendFunction.OVERLAY
+
+// 3. 加法模式（使图像变亮）
+blendFunction: BlendFunction.ADD
+
+// 4. 乘法模式（使图像变暗）
+blendFunction: BlendFunction.MULTIPLY
+```
+
+
+
+### 3. update() 方法的作用和用途
+
+`update()` 方法是 `Effect` 类的**生命周期方法**，在每一帧渲染时调用：
+
+javascript
+
+```
+export default class DrunkEffect extends Effect {
+  constructor() {
+    super(...);
+  }
+  
+  // update 方法：每帧调用，用于更新效果状态
+  update(renderer, inputBuffer, deltaTime) {
+    // renderer: WebGLRenderer 实例
+    // inputBuffer: 输入帧缓冲区
+    // deltaTime: 上一帧到当前帧的时间间隔（秒）
+    
+    // 更新 uniform 值
+    this.uniforms.get("time").value += deltaTime;
+    
+    // 可以在这里添加其他每帧更新的逻辑
+    // 如：响应键盘输入、鼠标位置、动画进度等
+  }
+}
+```
+
+
+
+#### **update() 方法的关键作用：**
+
+1. **动画控制**：随时间变化的参数（如 `time` uniform）
+2. **交互响应**：根据用户输入更新效果
+3. **状态管理**：跟踪效果内部状态变化
+4. **性能优化**：只在必要时更新参数
+
+#### **示例：随时间旋转的扭曲效果**
+
+javascript
+
+```
+update(renderer, inputBuffer, deltaTime) {
+  const timeUniform = this.uniforms.get("time");
+  const rotationUniform = this.uniforms.get("rotation");
+  
+  // 时间累积
+  timeUniform.value += deltaTime;
+  
+  // 旋转角度（每秒旋转90度）
+  rotationUniform.value = (rotationUniform.value + deltaTime * Math.PI/2) % (Math.PI * 2);
+  
+  // 根据输入缓冲区信息调整效果强度
+  if (inputBuffer && this.adaptiveEffect) {
+    const avgBrightness = this.calculateBrightness(inputBuffer);
+    this.uniforms.get("intensity").value = avgBrightness * 2.0;
+  }
+}
+```
+
+
+
+## 五、完整自定义效果开发流程
+
+### 步骤1：定义着色器
+
+javascript
+
+```
+const fragmentShader = /* glsl */ `
+    // 自定义 uniform
+    uniform float frequency;
+    uniform float amplitude;
+    uniform float time;
+    uniform vec2 mousePosition;
+    
+    // 1. UV 处理函数（可选）
+    void mainUv(inout vec2 uv) {
+        // 基于时间的UV扭曲
+        float distortion = sin(uv.y * frequency + time) * amplitude;
+        uv.x += distortion * 0.1;
+        uv.y += distortion * 0.05;
+        
+        // 鼠标交互影响（如果启用）
+        float mouseDist = distance(uv, mousePosition);
+        uv += normalize(uv - mousePosition) * (0.01 / (mouseDist + 0.01));
+    }
+    
+    // 2. 颜色处理函数（必需）
+    void mainImage(const in vec4 inputColor, 
+                   const in vec2 uv, 
+                   out vec4 outputColor) {
+        // 获取原始颜色
+        vec4 color = inputColor;
+        
+        // 颜色处理逻辑
+        float vignette = 1.0 - length(uv - 0.5) * 0.5;
+        color.rgb *= vignette;
+        
+        // 颜色分级（示例）
+        color.rgb = pow(color.rgb, vec3(1.2, 1.0, 0.8));
+        
+        // 输出处理后的颜色
+        outputColor = color;
+    }
+`;
+```
+
+
+
+### 步骤2：创建 Effect 类
+
+javascript
+
+```
+import { Effect, BlendFunction } from "postprocessing";
+import { Uniform, Vector2 } from "three";
+
+export default class CustomEffect extends Effect {
+  constructor({ 
+    frequency = 2.0,
+    amplitude = 0.1,
+    blendFunction = BlendFunction.NORMAL,
+    interactive = false 
+  } = {}) {
+    super("CustomEffect", fragmentShader, {
+      blendFunction,
+      uniforms: new Map([
+        ["frequency", new Uniform(frequency)],
+        ["amplitude", new Uniform(amplitude)],
+        ["time", new Uniform(0)],
+        ["mousePosition", new Uniform(new Vector2(0.5, 0.5))]
+      ])
+    });
+    
+    this.interactive = interactive;
+    this.mousePosition = new Vector2(0.5, 0.5);
+    
+    // 如果需要鼠标交互
+    if (interactive && typeof window !== 'undefined') {
+      window.addEventListener('mousemove', this.handleMouseMove);
+    }
+  }
+  
+  // 鼠标移动处理
+  handleMouseMove = (event) => {
+    // 将鼠标位置归一化到 [0, 1] 范围
+    this.mousePosition.x = event.clientX / window.innerWidth;
+    this.mousePosition.y = 1.0 - (event.clientY / window.innerHeight);
+  }
+  
+  // 更新方法
+  update(renderer, inputBuffer, deltaTime) {
+    // 更新时间
+    this.uniforms.get("time").value += deltaTime;
+    
+    // 更新鼠标位置
+    if (this.interactive) {
+      this.uniforms.get("mousePosition").value.copy(this.mousePosition);
+    }
+    
+    // 其他每帧更新的逻辑...
+  }
+  
+  // 清理资源
+  dispose() {
+    if (this.interactive && typeof window !== 'undefined') {
+      window.removeEventListener('mousemove', this.handleMouseMove);
+    }
+    super.dispose();
+  }
+}
+```
+
+
+
+### 步骤3：React 组件封装
+
+javascript
+
+```
+import { forwardRef, useMemo, useEffect } from "react";
+import { useFrame } from "@react-three/fiber";
+import CustomEffect from "./CustomEffect";
+
+export default forwardRef(function CustomEffectComponent(props, ref) {
+  // 使用 useMemo 避免每次渲染都创建新实例
+  const effect = useMemo(() => new CustomEffect(props), []);
+  
+  // 如果需要每帧更新但不想扩展 Effect 类，可以使用 useFrame
+  useFrame((state) => {
+    // 可以在这里更新效果，但通常建议在 Effect 类的 update 方法中处理
+  });
+  
+  // 将 effect 暴露给父组件
+  useEffect(() => {
+    if (ref) {
+      ref.current = effect;
+    }
+  }, [effect, ref]);
+  
+  return <primitive object={effect} dispose={null} />;
+});
+```
+
+
+
+## 六、实用技巧和最佳实践
+
+### 1. 效果顺序很重要
+
+javascript
+
+```
+<EffectComposer>
+  {/* 先处理颜色/亮度相关 */}
+  <Bloom />
+  <ToneMapping />
+  
+  {/* 再处理屏幕空间效果 */}
+  <SSR />
+  
+  {/* 最后处理全屏效果 */}
+  <Vignette />
+  <Noise />
+  <Glitch />
+</EffectComposer>
+```
+
+
+
+### 2. 使用 Leva 控制面板调试
+
+javascript
+
+```
+import { useControls } from 'leva';
+
+const bloomControls = useControls('Bloom', {
+  enabled: true,
+  intensity: { value: 0.5, min: 0, max: 3 },
+  threshold: { value: 0.4, min: 0, max: 1 },
+});
+
+<EffectComposer>
+  {bloomControls.enabled && (
+    <Bloom 
+      intensity={bloomControls.intensity}
+      luminanceThreshold={bloomControls.threshold}
+    />
+  )}
+</EffectComposer>
+```
+
