@@ -12,8 +12,8 @@ const root = ReactDOM.createRoot(document.querySelector("#root"));
 const cameraSettings = {
   fov: 45, // 视野角度
   near: 0.1, // 近平面
-  far: 2000, // 远平面
-  position: [-3, 1.5, 4], // 相机位置
+  far: 200, // 远平面
+  position: [4, 2, 6], // 相机位置
 };
 
 const created = ({ scene, gl }) => {

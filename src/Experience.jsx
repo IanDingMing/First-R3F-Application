@@ -47,59 +47,29 @@ import portalFragmentShader from "./shaders/portal/fragment.glsl";
 import Drunk from "./Drunk.jsx";
 
 export default function Experience() {
-  const computer = useGLTF(
-    "https://threejs-journey.com/resources/models/macbook_model.gltf",
-  );
-
   return (
     <>
-      <Environment files="./environmentMaps/the_sky_is_on_fire_2k.hdr" />
+      <Perf position="top-left" />
 
-      <color args={["#241a1a"]} attach="background" />
+      <OrbitControls makeDefault />
 
-      <PresentationControls
-        global // 关键：启用全局拖拽。在场景任何地方（而不仅是模型上）拖拽都能控制模型。
-        rotation={[0.13, 0.1, 0]} // 初始旋转角度 [x, y, z]
-        polar={[-0.4, 0.2]} // 垂直旋转（上下看）的角度限制 [最小值， 最大值]，单位是弧度
-        azimuth={[-1, 0.75]} // 水平旋转（左右看）的角度限制 [最小值， 最大值]，单位是弧度
-        config={{ mass: 2, tension: 400 }}
-        snap={{ mass: 4, tension: 400 }}
-      >
-        {/* 所有放在这里的3D对象都会受控制 */}
-        <Float rotationIntensity={0.4}>
-          <rectAreaLight
-            width={2.5}
-            height={1.65}
-            intensity={65}
-            color={"#fcfcfa"}
-            rotation={[-0.1, Math.PI, 0]}
-            position={[0, 0.55, -1.15]}
-          />
-          <primitive object={computer.scene} position-y={-1.2}>
-            <Html
-              transform
-              wrapperClass="htmlScreen"
-              distanceFactor={1.17}
-              position={[0, 1.56, -1.4]}
-              rotation-x={-0.256}
-            >
-              <iframe src="https://git-scm.com/book/zh/v2" />
-            </Html>
-            <Text
-              font="./bangers-v20-latin-regular.woff"
-              fontSize={1}
-              position={[2, 1.75, 0.75]}
-              rotation-y={-1.25}
-              maxWidth={2}
-              textAlign="center"
-            >
-              BRUNO SIMON
-            </Text>
-          </primitive>
-        </Float>
-      </PresentationControls>
+      <directionalLight castShadow position={[1, 2, 3]} intensity={4.5} />
+      <ambientLight intensity={1.5} />
 
-      <ContactShadows position-y={-1.4} opacity={0.4} scale={5} blur={2.4} />
+      <mesh castShadow position={[-2, 2, 0]}>
+        <sphereGeometry />
+        <meshStandardMaterial color="orange" />
+      </mesh>
+
+      <mesh castShadow position={[2, 2, 0]}>
+        <boxGeometry />
+        <meshStandardMaterial color="mediumpurple" />
+      </mesh>
+
+      <mesh receiveShadow position-y={-1.25}>
+        <boxGeometry args={[10, 0.5, 10]} />
+        <meshStandardMaterial color="greenyellow" />
+      </mesh>
     </>
   );
 }
